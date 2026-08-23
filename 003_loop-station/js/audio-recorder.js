@@ -12,6 +12,8 @@ export class PCMRecorder {
     this.stopFrame = null;
     this.stopResolver = null;
     this.mode = 'uninitialized';
+    this.scheduledStartFrame = null;
+    this.scheduledStopFrame = null;
   }
 
   async initialize() {
@@ -43,7 +45,21 @@ export class PCMRecorder {
     this.node = createProcessor(2048, 1, 1);
     this.node.onaudioprocess = (event) => {
       if (!this.active) return;
-      this.chunks.push(new Float32Array(event.inputBuffer.getChannelData(0)));
+      const input = event.inputBuffer.getChannelData(0);
+      const blockStart = Math.round((event.playbackTime ?? this.context.currentTime) * this.context.sampleRate);
+      const blockEnd = blockStart + input.length;
+      if (blockEnd <= this.scheduledStartFrame) return;
+      const from = Math.max(0, this.scheduledStartFrame - blockStart);
+      const to = Number.isFinite(this.scheduledStopFrame)
+        ? Math.max(from, Math.min(input.length, this.scheduledStopFrame - blockStart))
+        : input.length;
+      if (to > from) this.chunks.push(new Float32Array(input.subarray(from, to)));
+      if (Number.isFinite(this.scheduledStopFrame) && this.scheduledStopFrame <= blockEnd) {
+        this.active = false;
+        this.stopFrame = this.scheduledStopFrame;
+        this.stopResolver?.();
+        this.stopResolver = null;
+      }
     };
     this.sourceNode.connect(this.node);
     this.node.connect(this.silentGain);
@@ -62,30 +78,50 @@ export class PCMRecorder {
     }
   }
 
-  start() {
+  start(audioTime = this.context.currentTime) {
+    return this.startAt(audioTime);
+  }
+
+  startAt(audioTime) {
     if (this.active) throw new Error('Recorder is already active.');
     this.active = true;
     this.chunks = [];
     this.startFrame = null;
     this.stopFrame = null;
+    this.scheduledStartFrame = Math.round(audioTime * this.context.sampleRate);
+    this.scheduledStopFrame = null;
     this.recordingId += 1;
     if (this.mode === 'AudioWorklet') {
-      this.node.port.postMessage({ type: 'start', id: this.recordingId });
+      this.startFrame = this.scheduledStartFrame;
+      this.node.port.postMessage({ type: 'start', id: this.recordingId, atFrame: this.scheduledStartFrame });
     } else {
-      this.startFrame = Math.round(this.context.currentTime * this.context.sampleRate);
+      this.startFrame = this.scheduledStartFrame;
     }
-    return this.context.currentTime;
+    return audioTime;
   }
 
   async stop() {
+    return this.stopAt(this.context.currentTime);
+  }
+
+  async stopAt(audioTime) {
     if (!this.active) throw new Error('Recorder is not active.');
+    this.scheduledStopFrame = Math.round(audioTime * this.context.sampleRate);
+    const stopped = new Promise((resolve) => { this.stopResolver = resolve; });
     if (this.mode === 'AudioWorklet') {
-      const stopped = new Promise((resolve) => { this.stopResolver = resolve; });
-      this.node.port.postMessage({ type: 'stop', id: this.recordingId });
-      await Promise.race([stopped, new Promise((resolve) => setTimeout(resolve, 250))]);
+      this.node.port.postMessage({ type: 'stop', id: this.recordingId, atFrame: this.scheduledStopFrame });
     } else {
-      this.stopFrame = Math.round(this.context.currentTime * this.context.sampleRate);
+      const delay = Math.max(0, (audioTime - this.context.currentTime) * 1000);
+      window.setTimeout(() => {
+        if (!this.active) return;
+        this.active = false;
+        this.stopFrame = this.scheduledStopFrame;
+        this.stopResolver?.();
+        this.stopResolver = null;
+      }, delay + 100);
     }
+    const maxWait = Math.max(500, (audioTime - this.context.currentTime) * 1000 + 750);
+    await Promise.race([stopped, new Promise((resolve) => setTimeout(resolve, maxWait))]);
     this.active = false;
     const samples = this.mergeChunks(this.chunks);
     const startTime = (this.startFrame ?? Math.round(this.context.currentTime * this.context.sampleRate) - samples.length) / this.context.sampleRate;

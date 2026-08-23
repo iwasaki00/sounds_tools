@@ -5,6 +5,8 @@ const engine = new LooperEngine();
 const logs = [];
 let animationFrame = null;
 let lastDebugRender = 0;
+let goUntil = 0;
+let tapTimes = [];
 
 const $ = (selector) => document.querySelector(selector);
 const elements = {
@@ -57,13 +59,33 @@ const elements = {
   latencyResult: $('#latencyResult'),
   exportButton: $('#exportButton'),
   testSoundButton: $('#testSoundButton'),
+  bpmValue: $('#bpmValue'),
+  tapTempoButton: $('#tapTempoButton'),
+  bpmButtons: [...document.querySelectorAll('[data-bpm-delta]')],
+  timeSignature: $('#timeSignature'),
+  barNumber: $('#barNumber'),
+  beatDots: [...document.querySelectorAll('[data-beat]')],
+  recordingIndicator: $('#recordingIndicator'),
+  countdownOverlay: $('#countdownOverlay'),
+  countdownLabel: $('#countdownLabel'),
+  countdownNumber: $('#countdownNumber'),
+  countdownSubtext: $('#countdownSubtext'),
+  countInSelect: $('#countInSelect'),
+  metronomeSelect: $('#metronomeSelect'),
+  barQuantizeButton: $('#barQuantizeButton'),
+  overdubQuantizeButton: $('#overdubQuantizeButton'),
+  tempoDebug: $('#tempoDebug'),
 };
 
 const stateView = {
   [STATES.IDLE]: { action: 'REC', hint: 'FIRST LOOP' },
+  [STATES.COUNT_IN]: { action: 'COUNT IN', hint: 'GET READY' },
   [STATES.FIRST_RECORDING]: { action: 'STOP & LOOP', hint: 'RECORDING' },
+  [STATES.FIRST_RECORDING_ENDING]: { action: 'ENDING…', hint: 'NEXT BAR' },
   [STATES.PLAYING]: { action: 'OVERDUB', hint: 'LOOP PLAYING' },
+  [STATES.OVERDUB_PENDING]: { action: 'STARTING…', hint: 'NEXT BAR' },
   [STATES.OVERDUB_RECORDING]: { action: 'END OVERDUB', hint: 'LAYER RECORDING' },
+  [STATES.OVERDUB_ENDING]: { action: 'ENDING…', hint: 'NEXT BAR' },
   [STATES.STOPPED]: { action: 'PLAY', hint: 'LOOP STOPPED' },
   [STATES.ERROR]: { action: 'ERROR', hint: 'CHECK DEBUG' },
 };
@@ -92,6 +114,20 @@ elements.testSoundButton.addEventListener('click', () => runSafely(() => engine.
 elements.latencyButton.addEventListener('click', showLatencyReference);
 elements.exportButton.addEventListener('click', exportTest);
 elements.copyLogButton.addEventListener('click', copyLog);
+elements.bpmButtons.forEach((button) => button.addEventListener('click', () => {
+  setBpm(engine.tempo.bpm + Number(button.dataset.bpmDelta));
+}));
+elements.tapTempoButton.addEventListener('click', tapTempo);
+elements.countInSelect.addEventListener('change', () => engine.setCountInBars(Number(elements.countInSelect.value)));
+elements.metronomeSelect.addEventListener('change', () => engine.setMetronomeMode(elements.metronomeSelect.value));
+elements.barQuantizeButton.addEventListener('click', () => {
+  engine.setBarQuantize(!engine.barQuantize);
+  renderSettingToggles();
+});
+elements.overdubQuantizeButton.addEventListener('click', () => {
+  engine.setQuantizedOverdub(!engine.quantizedOverdub);
+  renderSettingToggles();
+});
 
 engine.addEventListener('statechange', ({ detail }) => renderState(detail.state));
 engine.addEventListener('layerschange', () => renderLayers());
@@ -109,6 +145,9 @@ engine.addEventListener('contextstate', ({ detail }) => {
   }
 });
 engine.addEventListener('error', ({ detail }) => showError(detail.error));
+engine.addEventListener('recordingstart', () => {
+  goUntil = performance.now() + 420;
+});
 
 document.addEventListener('visibilitychange', () => {
   addLog(`Visibility state: ${document.visibilityState}`);
@@ -130,6 +169,7 @@ async function initializeAudio() {
     renderState(STATES.IDLE);
     renderLayers();
     drawWaveform(elements.waveform, null);
+    renderTempoSettings();
     startAnimation();
   } catch (error) {
     engine.destroy();
@@ -154,7 +194,7 @@ async function handleMainAction() {
     };
     await actions[engine.state]?.();
   });
-  elements.loopButton.disabled = false;
+  renderState(engine.state);
 }
 
 async function runSafely(action) {
@@ -173,23 +213,47 @@ function renderState(state) {
   elements.engineBadge.querySelector('span').textContent = state;
   elements.engineBadge.classList.toggle('error', state === STATES.ERROR);
   const hasLayers = engine.layers.length > 0;
-  const recording = state === STATES.FIRST_RECORDING || state === STATES.OVERDUB_RECORDING;
-  elements.undoButton.disabled = engine.layers.length <= 1 || recording;
-  elements.stopButton.disabled = !hasLayers || recording;
+  const recording = [STATES.FIRST_RECORDING, STATES.FIRST_RECORDING_ENDING, STATES.OVERDUB_RECORDING, STATES.OVERDUB_ENDING].includes(state);
+  const pending = [STATES.COUNT_IN, STATES.FIRST_RECORDING_ENDING, STATES.OVERDUB_PENDING, STATES.OVERDUB_ENDING].includes(state);
+  elements.undoButton.disabled = engine.layers.length <= 1 || recording || pending;
+  elements.stopButton.disabled = !hasLayers || recording || state === STATES.OVERDUB_PENDING;
   elements.stopButton.textContent = state === STATES.STOPPED ? 'PLAY' : 'STOP';
   elements.clearButton.disabled = !hasLayers && state === STATES.IDLE;
   elements.testSoundButton.disabled = state !== STATES.IDLE;
+  elements.loopButton.disabled = pending || state === STATES.ERROR;
+  const tempoLocked = state !== STATES.IDLE || hasLayers;
+  elements.bpmButtons.forEach((button) => { button.disabled = tempoLocked; });
+  elements.tapTempoButton.disabled = tempoLocked;
+  elements.countInSelect.disabled = state !== STATES.IDLE;
+  elements.barQuantizeButton.disabled = state !== STATES.IDLE;
+  elements.overdubQuantizeButton.disabled = ![STATES.IDLE, STATES.PLAYING, STATES.STOPPED].includes(state);
   elements.statusAudio.textContent = engine.context?.state?.toUpperCase() || 'N/A';
-  elements.statusRecorder.textContent = recording ? 'RECORDING' : (engine.recorder?.mode || 'N/A').toUpperCase();
+  elements.statusRecorder.textContent = recording ? 'RECORDING' : (pending ? 'ARMED' : (engine.recorder?.mode || 'N/A').toUpperCase());
+  renderRecordingIndicator(state);
+  if ([STATES.FIRST_RECORDING_ENDING, STATES.OVERDUB_ENDING].includes(state)) {
+    showNotice('ENDING', 'Loop ends at next bar.', false);
+  } else if (state === STATES.OVERDUB_PENDING) {
+    showNotice('STARTING', 'Overdub starts at next bar.', false);
+  } else if (['ENDING', 'STARTING'].includes(elements.noticeTitle.textContent)) {
+    hideNotice();
+  }
   renderLayers();
 }
 
 function renderLayers() {
   const layers = engine.getLayers();
-  const playing = [STATES.PLAYING, STATES.OVERDUB_RECORDING].includes(engine.state);
+  const playing = [STATES.PLAYING, STATES.OVERDUB_PENDING, STATES.OVERDUB_RECORDING, STATES.OVERDUB_ENDING].includes(engine.state);
   elements.statusLayers.textContent = String(layers.length);
   elements.layerCount.textContent = `${layers.length} ${layers.length === 1 ? 'TRACK' : 'TRACKS'}`;
-  elements.undoButton.disabled = layers.length <= 1 || engine.state === STATES.OVERDUB_RECORDING;
+  const layerChangeLocked = [
+    STATES.COUNT_IN,
+    STATES.FIRST_RECORDING,
+    STATES.FIRST_RECORDING_ENDING,
+    STATES.OVERDUB_PENDING,
+    STATES.OVERDUB_RECORDING,
+    STATES.OVERDUB_ENDING,
+  ].includes(engine.state);
+  elements.undoButton.disabled = layers.length <= 1 || layerChangeLocked;
   if (!layers.length) {
     elements.layersList.className = 'empty-state';
     elements.layersList.textContent = '最初のループを録音してください';
@@ -208,6 +272,7 @@ function startAnimation() {
   const frame = () => {
     updateMeters();
     updateTransport();
+    updateTempoDisplay();
     if (elements.debugPanel.open && performance.now() - lastDebugRender > 250) {
       renderDebug();
       lastDebugRender = performance.now();
@@ -248,6 +313,37 @@ function updateTransport() {
   elements.statusAudio.textContent = engine.context?.state?.toUpperCase() || 'N/A';
 }
 
+function updateTempoDisplay() {
+  if (!engine.tempo) return;
+  const tempo = engine.tempo;
+  const position = tempo.getPosition();
+  elements.bpmValue.textContent = String(tempo.bpm);
+  elements.timeSignature.textContent = `${tempo.beatsPerBar} / ${tempo.beatUnit}`;
+  const firstRecording = [STATES.FIRST_RECORDING, STATES.FIRST_RECORDING_ENDING].includes(engine.state);
+  const displayBar = firstRecording ? Math.max(1, position.bar - tempo.countInBars) : position.bar;
+  elements.barNumber.textContent = displayBar > 0 ? String(displayBar) : '—';
+  elements.beatDots.forEach((dot, index) => dot.classList.toggle('is-active', position.beat === index + 1));
+
+  if (engine.state === STATES.COUNT_IN) {
+    elements.countdownOverlay.hidden = false;
+    elements.countdownOverlay.classList.remove('is-go');
+    elements.countdownLabel.textContent = 'COUNT IN';
+    elements.countdownNumber.textContent = position.beat || '…';
+    const countBar = position.bar || 1;
+    const lastBeat = countBar === tempo.countInBars && position.beat === tempo.beatsPerBar;
+    elements.countdownSubtext.textContent = lastBeat ? 'READY' : `BAR ${countBar} / ${tempo.countInBars}`;
+  } else if (performance.now() < goUntil) {
+    elements.countdownOverlay.hidden = false;
+    elements.countdownOverlay.classList.add('is-go');
+    elements.countdownLabel.textContent = 'RECORD';
+    elements.countdownNumber.textContent = 'GO!';
+    elements.countdownSubtext.textContent = 'ON THE BEAT';
+  } else {
+    elements.countdownOverlay.hidden = true;
+    elements.countdownOverlay.classList.remove('is-go');
+  }
+}
+
 function renderDebug() {
   const info = engine.getDebugInfo();
   const settings = info.microphone.settings;
@@ -286,6 +382,21 @@ function renderDebug() {
     'Last Overdub End': formatSeconds(info.timing.lastOverdubEnd),
     'Scheduling Ahead': formatSeconds(info.timing.schedulingAhead),
   });
+  fillDebugList(elements.tempoDebug, {
+    'BPM': info.tempo.bpm,
+    'Seconds Per Beat': formatSeconds(info.tempo.secondsPerBeat),
+    'Beats Per Bar': info.tempo.beatsPerBar,
+    'Current Beat': info.tempo.currentBeat,
+    'Current Bar': info.tempo.currentBar,
+    'Metronome Start Time': formatSeconds(info.tempo.metronomeStartTime),
+    'Next Scheduled Beat': formatSeconds(info.tempo.nextScheduledBeat),
+    'Count-In Bars': info.tempo.countInBars,
+    'Metronome Mode': info.tempo.metronomeMode,
+    'Quantize Mode': info.tempo.quantizeMode,
+    'Quantized Overdub': info.tempo.quantizedOverdub,
+    'Pending Recording Start': formatSeconds(info.tempo.pendingRecordingStart),
+    'Pending Recording Stop': formatSeconds(info.tempo.pendingRecordingStop),
+  });
   fillDebugList(elements.deviceDebug, {
     'User Agent': navigator.userAgent,
     'Screen Size': `${screen.width} × ${screen.height}`,
@@ -299,6 +410,51 @@ function renderDebug() {
 function fillDebugList(element, values) {
   element.innerHTML = Object.entries(values).map(([label, value]) =>
     `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(valueOrNA(value))}</dd></div>`).join('');
+}
+
+function setBpm(value) {
+  const bpm = engine.setBpm(value);
+  elements.bpmValue.textContent = String(bpm);
+}
+
+function tapTempo() {
+  const now = performance.now();
+  if (tapTimes.length && now - tapTimes[tapTimes.length - 1] > 2000) tapTimes = [];
+  tapTimes.push(now);
+  if (tapTimes.length > 8) tapTimes.shift();
+  if (tapTimes.length < 2) {
+    addLog('Tap tempo started');
+    return;
+  }
+  const intervals = tapTimes.slice(1).map((time, index) => time - tapTimes[index]);
+  const average = intervals.reduce((sum, value) => sum + value, 0) / intervals.length;
+  const bpm = Math.round(60000 / average);
+  if (bpm >= 40 && bpm <= 200) setBpm(bpm);
+}
+
+function renderTempoSettings() {
+  elements.bpmValue.textContent = String(engine.tempo.bpm);
+  elements.countInSelect.value = String(engine.tempo.countInBars);
+  elements.metronomeSelect.value = engine.tempo.metronomeMode;
+  renderSettingToggles();
+}
+
+function renderSettingToggles() {
+  const apply = (button, enabled) => {
+    button.setAttribute('aria-pressed', String(enabled));
+    button.textContent = enabled ? 'ON' : 'OFF';
+  };
+  apply(elements.barQuantizeButton, engine.barQuantize);
+  apply(elements.overdubQuantizeButton, engine.quantizedOverdub);
+}
+
+function renderRecordingIndicator(state) {
+  const recording = [STATES.FIRST_RECORDING, STATES.FIRST_RECORDING_ENDING, STATES.OVERDUB_RECORDING, STATES.OVERDUB_ENDING].includes(state);
+  const pending = [STATES.COUNT_IN, STATES.OVERDUB_PENDING].includes(state);
+  elements.recordingIndicator.classList.toggle('is-recording', recording);
+  elements.recordingIndicator.classList.toggle('is-pending', pending);
+  const label = recording ? 'RECORDING' : (pending ? 'ARMED' : (state === STATES.PLAYING ? 'PLAYING' : 'READY'));
+  elements.recordingIndicator.querySelector('span').textContent = label;
 }
 
 function addLog(message, date = new Date()) {

@@ -1,10 +1,15 @@
 import { PCMRecorder } from './audio-recorder.js';
+import { TempoClock } from './tempo-clock.js';
 
 export const STATES = Object.freeze({
   IDLE: 'IDLE',
+  COUNT_IN: 'COUNT_IN',
   FIRST_RECORDING: 'FIRST_RECORDING',
+  FIRST_RECORDING_ENDING: 'FIRST_RECORDING_ENDING',
   PLAYING: 'PLAYING',
+  OVERDUB_PENDING: 'OVERDUB_PENDING',
   OVERDUB_RECORDING: 'OVERDUB_RECORDING',
+  OVERDUB_ENDING: 'OVERDUB_ENDING',
   STOPPED: 'STOPPED',
   ERROR: 'ERROR',
 });
@@ -27,6 +32,7 @@ export class LooperEngine extends EventTarget {
     this.outputAnalyser = null;
     this.masterGain = null;
     this.monitorGain = null;
+    this.tempo = null;
     this.layers = [];
     this.loopLength = 0;
     this.playbackOrigin = null;
@@ -46,6 +52,11 @@ export class LooperEngine extends EventTarget {
     this.layerSequence = 0;
     this.requestedConstraints = REQUESTED_CONSTRAINTS;
     this.meterBuffers = new WeakMap();
+    this.barQuantize = true;
+    this.quantizedOverdub = true;
+    this.pendingRecordingStart = null;
+    this.pendingRecordingStop = null;
+    this.actionTimers = new Set();
   }
 
   async initialize() {
@@ -93,6 +104,8 @@ export class LooperEngine extends EventTarget {
 
     this.recorder = new PCMRecorder(this.context, this.micSource, (message) => this.log(message));
     await this.recorder.initialize();
+    this.tempo = new TempoClock(this.context, this.masterGain, (message) => this.log(message));
+    this.tempo.start();
     this.setMasterVolume(0.82);
     this.installLifecycleListeners();
     this.emit('initialized', this.getDebugInfo());
@@ -119,15 +132,40 @@ export class LooperEngine extends EventTarget {
 
   async startFirstRecording() {
     this.assertState(STATES.IDLE);
-    this.recordingStartedAt = this.recorder.start();
-    this.firstRecordingStartTime = this.recordingStartedAt;
-    this.log('First recording start');
-    this.setState(STATES.FIRST_RECORDING);
+    this.log('REC requested');
+    const startTime = this.tempo.beginCountIn();
+    this.pendingRecordingStart = startTime;
+    this.recordingStartedAt = this.recorder.startAt(startTime);
+    this.firstRecordingStartTime = startTime;
+    if (this.tempo.countInBars > 0) {
+      this.setState(STATES.COUNT_IN);
+    } else {
+      this.setState(STATES.FIRST_RECORDING);
+    }
+    this.scheduleActionAt(startTime, () => {
+      if (![STATES.COUNT_IN, STATES.FIRST_RECORDING].includes(this.state)) return;
+      this.tempo.finishCountIn();
+      this.pendingRecordingStart = null;
+      this.log(this.tempo.countInBars ? 'Recording started at bar boundary' : 'First recording start');
+      this.setState(STATES.FIRST_RECORDING);
+      this.emit('recordingstart', { type: 'first', time: startTime });
+    });
+    return startTime;
   }
 
   async finishFirstRecording() {
     this.assertState(STATES.FIRST_RECORDING);
-    const capture = await this.recorder.stop();
+    this.log('First recording end requested');
+    const stopTime = this.barQuantize
+      ? this.tempo.getNextBarTime(this.context.currentTime + 0.04)
+      : this.context.currentTime;
+    this.pendingRecordingStop = stopTime;
+    if (this.barQuantize) {
+      this.log(`Loop ends at next bar @ ${stopTime.toFixed(3)}`);
+      this.setState(STATES.FIRST_RECORDING_ENDING);
+    }
+    const capture = await this.recorder.stopAt(stopTime);
+    this.pendingRecordingStop = null;
     if (capture.samples.length < this.context.sampleRate * 0.2) {
       this.setState(STATES.IDLE);
       throw new Error('Recording is too short. Record at least 0.2 seconds.');
@@ -148,6 +186,7 @@ export class LooperEngine extends EventTarget {
     if (!this.layers.length) return;
     this.stopScheduledSources();
     this.playbackOrigin = this.context.currentTime + 0.06;
+    this.tempo.alignTo(this.playbackOrigin);
     this.nextCycleIndex = 0;
     this.loopCount = 0;
     this.lastReportedLoop = 0;
@@ -199,16 +238,42 @@ export class LooperEngine extends EventTarget {
 
   async startOverdub() {
     this.assertState(STATES.PLAYING);
-    this.recordingStartedAt = this.recorder.start();
-    this.lastOverdubStart = this.recordingStartedAt;
-    this.log('Overdub start');
-    this.setState(STATES.OVERDUB_RECORDING);
+    this.log('Overdub requested');
+    const startTime = this.quantizedOverdub
+      ? this.tempo.getNextBarTime(this.context.currentTime + 0.08)
+      : this.context.currentTime;
+    this.pendingRecordingStart = startTime;
+    this.recordingStartedAt = this.recorder.startAt(startTime);
+    this.lastOverdubStart = startTime;
+    if (this.quantizedOverdub) {
+      this.log(`Overdub starts at next bar @ ${startTime.toFixed(3)}`);
+      this.setState(STATES.OVERDUB_PENDING);
+    } else {
+      this.setState(STATES.OVERDUB_RECORDING);
+    }
+    this.scheduleActionAt(startTime, () => {
+      if (![STATES.OVERDUB_PENDING, STATES.OVERDUB_RECORDING].includes(this.state)) return;
+      this.pendingRecordingStart = null;
+      this.log('Overdub recording started');
+      this.setState(STATES.OVERDUB_RECORDING);
+      this.emit('recordingstart', { type: 'overdub', time: startTime });
+    });
+    return startTime;
   }
 
   async finishOverdub() {
     this.assertState(STATES.OVERDUB_RECORDING);
     this.log('Overdub end requested');
-    const capture = await this.recorder.stop();
+    const stopTime = this.quantizedOverdub
+      ? this.tempo.getNextBarTime(this.context.currentTime + 0.04)
+      : this.context.currentTime;
+    this.pendingRecordingStop = stopTime;
+    if (this.quantizedOverdub) {
+      this.log(`Overdub ends at next bar @ ${stopTime.toFixed(3)}`);
+      this.setState(STATES.OVERDUB_ENDING);
+    }
+    const capture = await this.recorder.stopAt(stopTime);
+    this.pendingRecordingStop = null;
     this.lastOverdubStart = capture.startTime;
     this.lastOverdubEnd = capture.endTime;
     if (!capture.samples.length) {
@@ -249,6 +314,7 @@ export class LooperEngine extends EventTarget {
   }
 
   clear() {
+    this.clearPendingActions();
     this.recorder?.cancel();
     this.clearScheduler();
     this.stopScheduledSources();
@@ -260,6 +326,9 @@ export class LooperEngine extends EventTarget {
     this.firstRecordingEndTime = null;
     this.lastOverdubStart = null;
     this.lastOverdubEnd = null;
+    this.pendingRecordingStart = null;
+    this.pendingRecordingStop = null;
+    this.tempo?.alignTo(this.context.currentTime + 0.08);
     this.log('All loop data cleared');
     this.setState(STATES.IDLE);
     this.emit('layerschange', { layers: [] });
@@ -267,22 +336,23 @@ export class LooperEngine extends EventTarget {
 
   createTestLoop() {
     if (this.state !== STATES.IDLE) throw new Error('Clear the current loop before starting test mode.');
-    const duration = 4;
+    const duration = this.tempo.getBarDuration();
     const length = Math.round(this.context.sampleRate * duration);
     const samples = new Float32Array(length);
-    for (let beat = 0; beat < 4; beat += 1) {
-      const start = Math.round(beat * this.context.sampleRate);
+    for (let beat = 0; beat < this.tempo.beatsPerBar; beat += 1) {
+      const start = Math.round(beat * this.tempo.getSecondsPerBeat() * this.context.sampleRate);
       const frequency = beat === 0 ? 1320 : 880;
       const clickLength = Math.round(this.context.sampleRate * 0.035);
       for (let i = 0; i < clickLength; i += 1) {
         samples[start + i] = Math.sin(2 * Math.PI * frequency * i / this.context.sampleRate) * Math.exp(-i / (this.context.sampleRate * 0.008)) * 0.55;
       }
     }
-    this.loopLength = duration;
-    this.layers = [this.createLayer('TEST CLICK', this.createBuffer(samples))];
+    const testBuffer = this.createBuffer(samples);
+    this.loopLength = testBuffer.duration;
+    this.layers = [this.createLayer('TEST CLICK', testBuffer)];
     this.firstRecordingStartTime = this.context.currentTime;
     this.firstRecordingEndTime = this.context.currentTime + duration;
-    this.log('Loop test mode: 4.000 sec click loop created');
+    this.log(`Loop test mode: ${duration.toFixed(3)} sec / ${this.tempo.bpm} BPM click loop created`);
     this.emit('layerschange', { layers: this.getLayers() });
     this.startPlayback();
   }
@@ -342,6 +412,30 @@ export class LooperEngine extends EventTarget {
     this.emit('monitorchange', { enabled: this.monitorEnabled });
   }
 
+  setBpm(value) {
+    if (this.layers.length || this.state !== STATES.IDLE) return this.tempo.bpm;
+    return this.tempo.setBpm(value);
+  }
+
+  setCountInBars(bars) {
+    if (this.state !== STATES.IDLE) return;
+    this.tempo.setCountInBars(bars);
+  }
+
+  setMetronomeMode(mode) {
+    this.tempo.setMetronomeMode(mode);
+  }
+
+  setBarQuantize(enabled) {
+    this.barQuantize = Boolean(enabled);
+    this.log(`Bar quantize ${this.barQuantize ? 'ON' : 'OFF'}`);
+  }
+
+  setQuantizedOverdub(enabled) {
+    this.quantizedOverdub = Boolean(enabled);
+    this.log(`Quantized overdub ${this.quantizedOverdub ? 'ON' : 'OFF'}`);
+  }
+
   async resumeAudio() {
     await this.context.resume();
     this.log('AudioContext resume requested by user');
@@ -394,6 +488,13 @@ export class LooperEngine extends EventTarget {
         lastOverdubStart: this.lastOverdubStart,
         lastOverdubEnd: this.lastOverdubEnd,
         schedulingAhead: this.schedulerAhead,
+      },
+      tempo: {
+        ...this.tempo?.getDebugInfo(),
+        quantizeMode: this.barQuantize ? 'BAR' : 'OFF',
+        quantizedOverdub: this.quantizedOverdub,
+        pendingRecordingStart: this.pendingRecordingStart,
+        pendingRecordingStop: this.pendingRecordingStop,
       },
     };
   }
@@ -455,10 +556,27 @@ export class LooperEngine extends EventTarget {
     this.dispatchEvent(new CustomEvent(type, { detail }));
   }
 
+  scheduleActionAt(audioTime, callback) {
+    const delay = Math.max(0, (audioTime - this.context.currentTime) * 1000);
+    const timer = window.setTimeout(() => {
+      this.actionTimers.delete(timer);
+      callback();
+    }, delay);
+    this.actionTimers.add(timer);
+    return timer;
+  }
+
+  clearPendingActions() {
+    this.actionTimers.forEach((timer) => window.clearTimeout(timer));
+    this.actionTimers.clear();
+  }
+
   destroy() {
+    this.clearPendingActions();
     this.clearScheduler();
     this.stopScheduledSources();
     this.recorder?.destroy();
+    this.tempo?.destroy();
     this.stream?.getTracks().forEach((track) => track.stop());
     this.context?.close();
   }

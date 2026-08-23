@@ -38,7 +38,34 @@
         <span class="engine-badge" id="engineBadge"><i></i> <span>READY</span></span>
       </header>
 
+      <section class="tempo-card" aria-label="テンポと拍">
+        <div class="tempo-heading">
+          <div><span>TEMPO</span><strong><b id="bpmValue">100</b> BPM</strong></div>
+          <div class="time-signature"><span>TIME</span><strong id="timeSignature">4 / 4</strong></div>
+        </div>
+        <div class="bpm-controls" aria-label="BPM調整">
+          <button type="button" data-bpm-delta="-5">−5</button>
+          <button type="button" data-bpm-delta="-1">−1</button>
+          <button class="tap-tempo" id="tapTempoButton" type="button">TAP</button>
+          <button type="button" data-bpm-delta="1">+1</button>
+          <button type="button" data-bpm-delta="5">+5</button>
+        </div>
+        <div class="musical-position">
+          <div class="bar-readout"><span>BAR</span><strong id="barNumber">—</strong></div>
+          <div class="recording-indicator" id="recordingIndicator"><i></i><span>READY</span></div>
+        </div>
+        <div class="beat-guide" id="beatGuide" aria-label="現在の拍">
+          <div class="beat-numbers"><span>1</span><span>2</span><span>3</span><span>4</span></div>
+          <div class="beat-dots"><i data-beat="1"></i><i data-beat="2"></i><i data-beat="3"></i><i data-beat="4"></i></div>
+        </div>
+      </section>
+
       <section class="transport-card" aria-label="ループ操作">
+        <div class="countdown-overlay" id="countdownOverlay" hidden aria-live="assertive">
+          <span id="countdownLabel">COUNT IN</span>
+          <strong id="countdownNumber">1</strong>
+          <small id="countdownSubtext">GET READY</small>
+        </div>
         <div class="loop-readout">
           <span>MASTER LOOP</span>
           <strong id="loopLength">—.— — sec</strong>
@@ -71,8 +98,36 @@
         <button class="toggle-control" id="monitorButton" type="button" aria-pressed="false"><span>MIC MONITOR</span><strong>OFF</strong></button>
       </section>
 
+      <section class="tempo-settings">
+        <div class="setting-row">
+          <label for="countInSelect"><span>COUNT IN</span><small>録音前のカウント</small></label>
+          <select id="countInSelect">
+            <option value="0">OFF</option>
+            <option value="1" selected>1 BAR</option>
+            <option value="2">2 BAR</option>
+          </select>
+        </div>
+        <div class="setting-row">
+          <label for="metronomeSelect"><span>METRONOME</span><small>イヤホン推奨</small></label>
+          <select id="metronomeSelect">
+            <option value="OFF">OFF</option>
+            <option value="COUNT_IN_ONLY" selected>COUNT-IN ONLY</option>
+            <option value="ALWAYS">ALWAYS</option>
+          </select>
+        </div>
+        <div class="setting-row">
+          <div><span>BAR QUANTIZE</span><small>次の小節頭でループ終了</small></div>
+          <button class="setting-toggle" id="barQuantizeButton" type="button" aria-pressed="true">ON</button>
+        </div>
+        <div class="setting-row">
+          <div><span>QUANTIZED OVERDUB</span><small>小節頭で開始・終了</small></div>
+          <button class="setting-toggle" id="overdubQuantizeButton" type="button" aria-pressed="true">ON</button>
+        </div>
+        <p class="headphone-note"><strong>イヤホン推奨</strong> — 本体スピーカーのクリック音をマイクが拾う場合があります。</p>
+      </section>
+
       <section class="test-controls">
-        <div><strong>LOOP TEST MODE</strong><small>4秒・1秒間隔のクリックで周回精度を確認</small></div>
+        <div><strong>LOOP TEST MODE</strong><small>現在のBPMで1小節のクリックを生成</small></div>
         <button id="testSoundButton" type="button">TEST SOUND</button>
       </section>
 
@@ -98,6 +153,7 @@
           <section><h3>MICROPHONE</h3><dl id="micDebug"></dl></section>
           <section><h3>AUDIO CONSTRAINTS</h3><dl id="constraintsDebug"></dl></section>
           <section><h3>TIMING</h3><dl id="timingDebug"></dl></section>
+          <section><h3>TEMPO / QUANTIZE</h3><dl id="tempoDebug"></dl></section>
           <section><h3>DEVICE</h3><dl id="deviceDebug"></dl></section>
           <section class="debug-actions">
             <h3>TOOLS</h3>
