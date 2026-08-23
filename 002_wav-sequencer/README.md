@@ -40,7 +40,7 @@ iPhoneでは縦向き・横向きのどちらも、各トラックの16ステッ
 外部素材を使わず、Python標準ライブラリだけでジャンル用WAVを再生成できます。
 
 ```powershell
-cd C:\_wk\github\sounds_tools\023_wav_sequencer
+cd C:\_wk\github\sounds_tools\002_wav-sequencer
 py -3 generate_genre_sfx.py
 ```
 
@@ -51,7 +51,7 @@ py -3 generate_genre_sfx.py
 このフォルダーをHTTPサーバーで開いてください。
 
 ```powershell
-cd C:\_wk\github\sounds_tools\023_wav_sequencer
+cd C:\_wk\github\sounds_tools\002_wav-sequencer
 py -3 -m http.server 8000
 ```
 

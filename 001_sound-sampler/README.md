@@ -4,7 +4,7 @@ iPhone Safari / Chromeで使える、Web Audio APIベースの効果音サンプ
 
 ## 起動方法
 
-リポジトリのルートを静的HTTPサーバーで配信し、`sounds_tools/020_sound-sampler/` を開きます。ファイルを直接開くと`fetch`が制限されるため、HTTP経由で確認してください。
+リポジトリのルートを静的HTTPサーバーで配信し、`sounds_tools/001_sound-sampler/` を開きます。ファイルを直接開くと`fetch`が制限されるため、HTTP経由で確認してください。
 
 ```powershell
 py -3 -m http.server 8000
