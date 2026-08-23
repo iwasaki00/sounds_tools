@@ -26,17 +26,38 @@ export class TempoClock extends EventTarget {
     this.activeClicks = new Set();
     this.pendingLogTimers = new Set();
     this.nextScheduledBeat = null;
+    this.state = 'STOPPED';
   }
 
-  start() {
-    this.reanchor(this.context.currentTime + 0.08);
+  start(startTime = this.context.currentTime + 0.08) {
+    if (this.schedulerTimer) window.clearInterval(this.schedulerTimer);
+    this.reanchor(startTime);
+    this.state = 'RUNNING';
     this.schedulerTimer = window.setInterval(() => this.scheduleAhead(), this.schedulerInterval);
     this.scheduleAhead();
+    this.log(`TempoClock started at ${startTime.toFixed(3)}`);
+    this.emit('change', this.getDebugInfo());
+  }
+
+  stop({ log = true } = {}) {
+    if (this.schedulerTimer) window.clearInterval(this.schedulerTimer);
+    this.schedulerTimer = null;
+    this.stopClicks();
+    this.clearPendingLogTimers();
+    this.origin = null;
+    this.nextBeatIndex = 0;
+    this.nextScheduledBeat = null;
+    this.countInStart = null;
+    this.countInEnd = null;
+    this.countInActive = false;
+    this.state = 'STOPPED';
+    if (log) this.log('TempoClock stopped');
+    this.emit('change', this.getDebugInfo());
   }
 
   setBpm(value) {
     this.bpm = Math.max(40, Math.min(200, Math.round(Number(value))));
-    this.reanchor(this.context.currentTime + 0.08);
+    if (this.state === 'RUNNING') this.reanchor(this.context.currentTime + 0.08);
     this.log(`BPM = ${this.bpm}`);
     this.emit('change', this.getDebugInfo());
     return this.bpm;
@@ -65,9 +86,8 @@ export class TempoClock extends EventTarget {
     this.countInStart = startTime;
     this.countInEnd = startTime + this.countInBars * this.getBarDuration();
     this.countInActive = this.countInBars > 0;
-    this.reanchor(startTime);
+    this.start(startTime);
     this.scheduleCountInLogs();
-    this.scheduleAhead();
     this.log(this.countInActive ? 'Count-in started' : 'Count-in OFF');
     return this.countInEnd;
   }
@@ -80,8 +100,7 @@ export class TempoClock extends EventTarget {
     this.countInActive = false;
     this.countInStart = null;
     this.countInEnd = null;
-    this.reanchor(time);
-    this.scheduleAhead();
+    this.start(time);
   }
 
   reanchor(time) {
@@ -93,7 +112,7 @@ export class TempoClock extends EventTarget {
   }
 
   scheduleAhead() {
-    if (!Number.isFinite(this.origin)) return;
+    if (this.state !== 'RUNNING' || !Number.isFinite(this.origin)) return;
     const horizon = this.context.currentTime + this.schedulerAhead;
     while (this.origin + this.nextBeatIndex * this.getSecondsPerBeat() <= horizon) {
       const beatTime = this.origin + this.nextBeatIndex * this.getSecondsPerBeat();
@@ -172,6 +191,7 @@ export class TempoClock extends EventTarget {
   getDebugInfo() {
     const position = this.getPosition();
     return {
+      state: this.state,
       bpm: this.bpm,
       secondsPerBeat: this.getSecondsPerBeat(),
       beatsPerBar: this.beatsPerBar,
@@ -206,9 +226,6 @@ export class TempoClock extends EventTarget {
   }
 
   destroy() {
-    if (this.schedulerTimer) window.clearInterval(this.schedulerTimer);
-    this.schedulerTimer = null;
-    this.stopClicks();
-    this.clearPendingLogTimers();
+    this.stop({ log: false });
   }
 }

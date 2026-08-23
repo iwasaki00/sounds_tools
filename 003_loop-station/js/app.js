@@ -60,6 +60,7 @@ const elements = {
   exportButton: $('#exportButton'),
   testSoundButton: $('#testSoundButton'),
   bpmValue: $('#bpmValue'),
+  tempoLockStatus: $('#tempoLockStatus'),
   tapTempoButton: $('#tapTempoButton'),
   bpmButtons: [...document.querySelectorAll('[data-bpm-delta]')],
   timeSignature: $('#timeSignature'),
@@ -225,6 +226,7 @@ function renderState(state) {
   const tempoLocked = state !== STATES.IDLE || hasLayers;
   elements.bpmButtons.forEach((button) => { button.disabled = tempoLocked; });
   elements.tapTempoButton.disabled = tempoLocked;
+  elements.tempoLockStatus.hidden = !tempoLocked;
   elements.countInSelect.disabled = state !== STATES.IDLE;
   elements.recordEndSelect.disabled = state !== STATES.IDLE;
   elements.overdubQuantizeButton.disabled = ![STATES.IDLE, STATES.PLAYING, STATES.STOPPED].includes(state);
@@ -381,23 +383,30 @@ function renderDebug() {
     'Actual Auto Gain Control': valueOrNA(settings.autoGainControl),
   });
   fillDebugList(elements.timingDebug, {
+    'Looper State': info.timing.looperState,
     'Master Loop Length': formatSeconds(info.timing.loopLength),
     'Current Loop Number': info.timing.loopNumber,
     'Current Loop Position': formatSeconds(info.timing.loopPosition),
-    'First Recording Start': formatSeconds(info.timing.firstRecordingStart),
-    'First Recording End': formatSeconds(info.timing.firstRecordingEnd),
-    'Playback Start': formatSeconds(info.timing.playbackStart),
+    'Recording Start Time': formatSeconds(info.timing.firstRecordingStart),
+    'Recording End Time': formatSeconds(info.timing.firstRecordingEnd),
+    'Calculated Loop Length': formatSeconds(info.timing.loopLength),
+    'Playback Start Time': formatSeconds(info.timing.playbackStart),
+    'PlaybackStart - RecordingEnd': formatSeconds(info.timing.playbackStartDifference),
+    'Next Loop Time': formatSeconds(info.timing.nextLoopTime),
+    'Loop Index': info.timing.loopIndex,
+    'Scheduled Loop Index': info.timing.scheduledLoopIndex,
     'Last Overdub Start': formatSeconds(info.timing.lastOverdubStart),
     'Last Overdub End': formatSeconds(info.timing.lastOverdubEnd),
     'Scheduling Ahead': formatSeconds(info.timing.schedulingAhead),
   });
   fillDebugList(elements.tempoDebug, {
+    'TempoClock State': info.tempo.state,
     'BPM': info.tempo.bpm,
     'Seconds Per Beat': formatSeconds(info.tempo.secondsPerBeat),
     'Beats Per Bar': info.tempo.beatsPerBar,
     'Current Beat': info.tempo.currentBeat,
     'Current Bar': info.tempo.currentBar,
-    'Metronome Start Time': formatSeconds(info.tempo.metronomeStartTime),
+    'TempoClock Start Time': formatSeconds(info.tempo.metronomeStartTime),
     'Next Scheduled Beat': formatSeconds(info.tempo.nextScheduledBeat),
     'Count-In Bars': info.tempo.countInBars,
     'Metronome Mode': info.tempo.metronomeMode,

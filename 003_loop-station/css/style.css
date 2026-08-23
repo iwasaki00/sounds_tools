@@ -34,6 +34,7 @@ button { color:inherit; touch-action:manipulation; }
 .bpm-controls { display:grid; grid-template-columns:repeat(5,1fr); gap:7px; margin-top:16px; }
 .bpm-controls button { min-height:46px; background:#222831; border:1px solid #353e49; border-radius:11px; font-weight:850; font-size:.74rem; }
 .bpm-controls .tap-tempo { color:#12170d; background:var(--green); border-color:var(--green); letter-spacing:.08em; }
+.tempo-lock-status { margin:9px 0 0; color:var(--amber); font:750 .62rem ui-monospace,monospace; letter-spacing:.09em; text-align:right; }
 .bpm-controls button:disabled { opacity:.3; }
 .musical-position { display:flex; align-items:center; justify-content:space-between; margin-top:18px; padding-top:15px; border-top:1px solid #282f38; }
 .bar-readout{display:flex;align-items:baseline;gap:9px}.bar-readout span{color:var(--muted);font:750 .62rem ui-monospace,monospace;letter-spacing:.12em}.bar-readout strong{font:850 1.5rem ui-monospace,monospace}

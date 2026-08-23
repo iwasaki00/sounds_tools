@@ -52,6 +52,7 @@ export class LooperEngine extends EventTarget {
     this.recordingStartedAt = null;
     this.firstRecordingStartTime = null;
     this.firstRecordingEndTime = null;
+    this.playbackStartDifference = null;
     this.lastOverdubStart = null;
     this.lastOverdubEnd = null;
     this.monitorEnabled = false;
@@ -115,7 +116,6 @@ export class LooperEngine extends EventTarget {
     this.recorder = new PCMRecorder(this.context, this.micSource, (message) => this.log(message));
     await this.recorder.initialize();
     this.tempo = new TempoClock(this.context, this.masterGain, (message) => this.log(message));
-    this.tempo.start();
     this.setMasterVolume(0.82);
     this.installLifecycleListeners();
     this.emit('initialized', this.getDebugInfo());
@@ -184,6 +184,7 @@ export class LooperEngine extends EventTarget {
     const capture = await this.recorder.stopAt(plan.captureStopTime);
     this.pendingRecordingStop = null;
     if (capture.samples.length < this.context.sampleRate * 0.2) {
+      this.tempo.stop();
       this.setState(STATES.IDLE);
       throw new Error('Recording is too short. Record at least 0.2 seconds.');
     }
@@ -197,15 +198,21 @@ export class LooperEngine extends EventTarget {
     this.layers = [this.createLayer('FIRST LOOP', buffer)];
     this.log(`Recording finalized at ${formatBars(plan.calculatedTargetBars)} bars`);
     this.log(`Loop length = ${this.loopLength.toFixed(3)} sec`);
-    this.startPlayback();
+    this.startPlayback({ requestedStartTime: this.firstRecordingEndTime, reason: 'first loop' });
     this.emit('layerschange', { layers: this.getLayers() });
     return this.layers[0];
   }
 
-  startPlayback() {
+  startPlayback({ requestedStartTime = null, reason = 'play' } = {}) {
     if (!this.layers.length) return;
     this.stopScheduledSources();
-    this.playbackOrigin = this.context.currentTime + 0.06;
+    const safeStartTime = this.context.currentTime + 0.03;
+    this.playbackOrigin = Number.isFinite(requestedStartTime)
+      ? Math.max(requestedStartTime, safeStartTime)
+      : safeStartTime;
+    this.playbackStartDifference = Number.isFinite(requestedStartTime) && Number.isFinite(this.firstRecordingEndTime)
+      ? this.playbackOrigin - this.firstRecordingEndTime
+      : null;
     this.tempo.alignTo(this.playbackOrigin);
     this.nextCycleIndex = 0;
     this.loopCount = 0;
@@ -213,7 +220,11 @@ export class LooperEngine extends EventTarget {
     this.schedulerTimer = window.setInterval(() => this.scheduleAhead(), this.schedulerInterval);
     this.setState(STATES.PLAYING);
     this.scheduleAhead();
-    this.log(`Loop playback scheduled at ${this.playbackOrigin.toFixed(3)}`);
+    this.log(`Playback scheduled (${reason}) at ${this.playbackOrigin.toFixed(3)}`);
+    if (Number.isFinite(this.playbackStartDifference)) {
+      this.log(`Playback scheduled ${this.playbackStartDifference >= 0 ? '+' : ''}${this.playbackStartDifference.toFixed(3)} sec after recording end`);
+    }
+    this.scheduleActionAt(this.playbackOrigin, () => this.log('Playback started'));
   }
 
   scheduleAhead() {
@@ -228,18 +239,41 @@ export class LooperEngine extends EventTarget {
 
   scheduleCycle(when, cycleIndex) {
     // JavaScriptタイマーは先読みのきっかけにだけ使い、実際の発音時刻はAudioContextへ予約する。
-    this.layers.forEach((layer) => {
-      const source = this.context.createBufferSource();
-      source.buffer = layer.buffer;
-      source.connect(this.masterGain);
-      const entry = { source, layerId: layer.id, cycleIndex };
-      this.activeSources.add(entry);
-      source.onended = () => {
-        this.activeSources.delete(entry);
-        source.disconnect();
-      };
-      source.start(when);
-    });
+    this.layers.forEach((layer) => this.scheduleLayerAt(layer, when, cycleIndex));
+  }
+
+  scheduleLayerAt(layer, when, cycleIndex, offset = 0) {
+    const alreadyScheduled = [...this.activeSources]
+      .some((entry) => entry.layerId === layer.id && entry.cycleIndex === cycleIndex);
+    if (alreadyScheduled) return;
+    const source = this.context.createBufferSource();
+    source.buffer = layer.buffer;
+    source.connect(this.masterGain);
+    const entry = { source, layerId: layer.id, cycleIndex };
+    this.activeSources.add(entry);
+    source.onended = () => {
+      this.activeSources.delete(entry);
+      source.disconnect();
+    };
+    source.start(when, offset);
+  }
+
+  scheduleNewLayerWithoutLoopWait(layer) {
+    if (!this.playbackOrigin || !this.loopLength) return;
+    const when = this.context.currentTime + 0.03;
+    if (when < this.playbackOrigin) {
+      this.scheduleLayerAt(layer, this.playbackOrigin, 0);
+      return;
+    }
+    const cycleIndex = Math.floor((when - this.playbackOrigin) / this.loopLength);
+    const cycleStart = this.playbackOrigin + cycleIndex * this.loopLength;
+    const offset = Math.max(0, when - cycleStart);
+    this.scheduleLayerAt(layer, when, cycleIndex, offset);
+    for (let index = cycleIndex + 1; index < this.nextCycleIndex; index += 1) {
+      const cycleTime = this.playbackOrigin + index * this.loopLength;
+      if (cycleTime >= this.context.currentTime) this.scheduleLayerAt(layer, cycleTime, index);
+    }
+    this.log(`Overdub playback scheduled without loop wait (cycle ${cycleIndex + 1}, offset ${offset.toFixed(3)} sec)`);
   }
 
   stopPlayback() {
@@ -247,6 +281,7 @@ export class LooperEngine extends EventTarget {
     if (this.state === STATES.OVERDUB_RECORDING) this.recorder.cancel();
     this.clearScheduler();
     this.stopScheduledSources();
+    this.tempo.stop();
     this.log('Playback stopped');
     this.setState(STATES.STOPPED);
   }
@@ -317,6 +352,7 @@ export class LooperEngine extends EventTarget {
     }
     const layer = this.createLayer('OVERDUB', this.createBuffer(aligned));
     this.layers.push(layer);
+    this.scheduleNewLayerWithoutLoopWait(layer);
     this.log(`Overdub added (Layer ${this.layers.length})`);
     this.setState(STATES.PLAYING);
     this.emit('layerschange', { layers: this.getLayers() });
@@ -347,12 +383,13 @@ export class LooperEngine extends EventTarget {
     this.loopCount = 0;
     this.firstRecordingStartTime = null;
     this.firstRecordingEndTime = null;
+    this.playbackStartDifference = null;
     this.lastOverdubStart = null;
     this.lastOverdubEnd = null;
     this.pendingRecordingStart = null;
     this.pendingRecordingStop = null;
     this.recordingEndDebug = this.createEmptyRecordingEndDebug();
-    this.tempo?.alignTo(this.context.currentTime + 0.08);
+    this.tempo?.stop();
     this.log('All loop data cleared');
     this.setState(STATES.IDLE);
     this.emit('layerschange', { layers: [] });
@@ -509,12 +546,17 @@ export class LooperEngine extends EventTarget {
       },
       recorder: this.recorder?.mode ?? 'N/A',
       timing: {
+        looperState: this.state,
         loopLength: this.loopLength,
         loopNumber: this.getCurrentLoopNumber(),
         loopPosition: this.getCurrentPosition(),
         firstRecordingStart: this.firstRecordingStartTime,
         firstRecordingEnd: this.firstRecordingEndTime,
         playbackStart: this.playbackOrigin,
+        playbackStartDifference: this.playbackStartDifference,
+        nextLoopTime: this.getNextPlaybackBoundary(),
+        loopIndex: Math.max(0, this.getCurrentLoopNumber() - 1),
+        scheduledLoopIndex: Math.max(0, this.nextCycleIndex - 1),
         lastOverdubStart: this.lastOverdubStart,
         lastOverdubEnd: this.lastOverdubEnd,
         schedulingAhead: this.schedulerAhead,
@@ -575,6 +617,7 @@ export class LooperEngine extends EventTarget {
   fail(error) {
     this.clearScheduler();
     this.stopScheduledSources();
+    this.tempo?.stop();
     this.setState(STATES.ERROR);
     this.emit('error', { error });
   }
@@ -682,6 +725,13 @@ export class LooperEngine extends EventTarget {
       actualRecordedBufferLength: null,
       finalTrimmedBufferLength: null,
     };
+  }
+
+  getNextPlaybackBoundary() {
+    if (!this.playbackOrigin || !this.loopLength || !this.context) return null;
+    if (this.context.currentTime < this.playbackOrigin) return this.playbackOrigin;
+    const nextIndex = Math.floor((this.context.currentTime - this.playbackOrigin) / this.loopLength) + 1;
+    return this.playbackOrigin + nextIndex * this.loopLength;
   }
 
   scheduleActionAt(audioTime, callback) {
