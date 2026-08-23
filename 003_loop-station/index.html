@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#090b0f">
+  <meta name="description" content="iPhone Safariで録音・ループ再生・オーバーダブを検証するライブ・ルーパー">
+  <title>Live Looper — Phase 1</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <main class="app-shell">
+    <section class="start-screen" id="startScreen">
+      <p class="kicker">Looper Engine / Phase 1</p>
+      <h1>LIVE<br><span>LOOPER</span></h1>
+      <p class="start-copy">声や楽器をその場で録音し、重ねていくライブ・ルーパー検証機です。</p>
+      <button class="start-button" id="startAudioButton" type="button">
+        <span class="start-icon" aria-hidden="true"></span>
+        <span>オーディオ開始</span>
+        <small>マイクの使用を許可してください</small>
+      </button>
+      <p class="secure-note">iPhone Safari・HTTPS環境を推奨</p>
+    </section>
+
+    <section class="looper-screen" id="looperScreen" hidden>
+      <aside class="notice" id="notice" hidden role="status" aria-live="polite">
+        <div><strong id="noticeTitle">WARNING</strong><p id="noticeMessage"></p></div>
+        <button id="resumeAudioButton" type="button" hidden>RESUME AUDIO</button>
+      </aside>
+
+      <header class="app-header">
+        <div>
+          <p class="kicker">Phase 1 / Engine Test</p>
+          <h1>LIVE LOOPER</h1>
+        </div>
+        <span class="engine-badge" id="engineBadge"><i></i> <span>READY</span></span>
+      </header>
+
+      <section class="transport-card" aria-label="ループ操作">
+        <div class="loop-readout">
+          <span>MASTER LOOP</span>
+          <strong id="loopLength">—.— — sec</strong>
+        </div>
+        <div class="progress-track"><span id="progressFill"></span><i id="progressHead"></i></div>
+        <div class="progress-labels"><span>0.0</span><span id="loopPosition">READY</span><span id="loopEnd">—.—</span></div>
+
+        <div class="loop-counter"><span>LOOP COUNT</span><strong id="loopCount">0</strong></div>
+
+        <button class="loop-button" id="loopButton" type="button">
+          <span class="loop-button-ring"></span>
+          <span class="loop-action" id="loopAction">REC</span>
+          <small id="loopHint">FIRST LOOP</small>
+        </button>
+
+        <div class="secondary-controls">
+          <button id="undoButton" type="button" disabled>UNDO</button>
+          <button id="stopButton" type="button" disabled>STOP</button>
+          <button class="danger" id="clearButton" type="button" disabled>CLEAR</button>
+        </div>
+      </section>
+
+      <section class="meter-card">
+        <div class="meter-row"><span>INPUT</span><div class="meter"><i id="inputMeter"></i></div><b id="clipLabel">OK</b></div>
+        <div class="meter-row"><span>OUTPUT</span><div class="meter output"><i id="outputMeter"></i></div><b>LIVE</b></div>
+      </section>
+
+      <section class="quick-settings">
+        <label class="volume-control">MASTER <input id="masterVolume" type="range" min="0" max="100" value="82"><output id="masterVolumeValue">82%</output></label>
+        <button class="toggle-control" id="monitorButton" type="button" aria-pressed="false"><span>MIC MONITOR</span><strong>OFF</strong></button>
+      </section>
+
+      <section class="test-controls">
+        <div><strong>LOOP TEST MODE</strong><small>4秒・1秒間隔のクリックで周回精度を確認</small></div>
+        <button id="testSoundButton" type="button">TEST SOUND</button>
+      </section>
+
+      <section class="waveform-card">
+        <div class="section-heading"><h2>FIRST LOOP</h2><span>WAVEFORM</span></div>
+        <canvas id="waveformCanvas" width="640" height="150" aria-label="最初のループの波形"></canvas>
+      </section>
+
+      <section class="status-card">
+        <h2>STATUS</h2>
+        <dl><div><dt>Microphone</dt><dd id="statusMic">READY</dd></div><div><dt>AudioContext</dt><dd id="statusAudio">READY</dd></div><div><dt>Recorder</dt><dd id="statusRecorder">READY</dd></div><div><dt>First Loop</dt><dd id="statusFirstLoop">N/A</dd></div><div><dt>Layers</dt><dd id="statusLayers">0</dd></div><div><dt>Loop Count</dt><dd id="statusLoopCount">0</dd></div><div><dt>Monitor</dt><dd id="statusMonitor">OFF</dd></div></dl>
+      </section>
+
+      <section class="layers-card">
+        <div class="section-heading"><h2>LAYERS</h2><span id="layerCount">0 TRACKS</span></div>
+        <div class="empty-state" id="layersList">最初のループを録音してください</div>
+      </section>
+
+      <details class="debug-panel" id="debugPanel">
+        <summary>DEBUG <span>ENGINE DATA</span></summary>
+        <div class="debug-content">
+          <section><h3>AUDIO CONTEXT</h3><dl id="audioDebug"></dl></section>
+          <section><h3>MICROPHONE</h3><dl id="micDebug"></dl></section>
+          <section><h3>AUDIO CONSTRAINTS</h3><dl id="constraintsDebug"></dl></section>
+          <section><h3>TIMING</h3><dl id="timingDebug"></dl></section>
+          <section><h3>DEVICE</h3><dl id="deviceDebug"></dl></section>
+          <section class="debug-actions">
+            <h3>TOOLS</h3>
+            <div><button id="latencyTestButton" type="button">LATENCY TEST</button><button id="exportButton" type="button">EXPORT TEST</button></div>
+            <output id="latencyResult">APIから取得できる参考値を表示します。</output>
+          </section>
+          <section class="event-log"><div class="section-heading"><h3>EVENT LOG</h3><button id="copyLogButton" type="button">LOG COPY</button></div><pre id="eventLog"></pre><textarea id="logFallback" hidden readonly></textarea></section>
+        </div>
+      </details>
+    </section>
+  </main>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

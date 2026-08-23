@@ -6,6 +6,7 @@
 
 - `001_sound-sampler` — 効果音を再生できるサウンドサンプラー
 - `002_wav-sequencer` — WAV素材を組み合わせるシーケンサー
+- `003_loop-station` — 録音・ループ再生・オーバーダブを行うライブ・ルーパー
 
 ## ローカルでの実行
 
@@ -17,6 +18,7 @@ py -3 -m http.server 8000
 
 - `http://localhost:8000/001_sound-sampler/`
 - `http://localhost:8000/002_wav-sequencer/`
+- `http://localhost:8000/003_loop-station/`
 
 ## GitHub Pages
 
@@ -25,4 +27,5 @@ GitHubの `Settings > Pages` で `Deploy from a branch` を選び、`main` ブ�
 - ポータル: `https://iwasaki00.github.io/sounds_tools/`
 - 効果音サンプラー: `https://iwasaki00.github.io/sounds_tools/001_sound-sampler/`
 - WAVシーケンサー: `https://iwasaki00.github.io/sounds_tools/002_wav-sequencer/`
+- ループステーション: `https://iwasaki00.github.io/sounds_tools/003_loop-station/`
 

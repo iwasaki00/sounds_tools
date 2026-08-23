@@ -1,0 +1,465 @@
+import { PCMRecorder } from './audio-recorder.js';
+
+export const STATES = Object.freeze({
+  IDLE: 'IDLE',
+  FIRST_RECORDING: 'FIRST_RECORDING',
+  PLAYING: 'PLAYING',
+  OVERDUB_RECORDING: 'OVERDUB_RECORDING',
+  STOPPED: 'STOPPED',
+  ERROR: 'ERROR',
+});
+
+const REQUESTED_CONSTRAINTS = Object.freeze({
+  echoCancellation: false,
+  noiseSuppression: false,
+  autoGainControl: false,
+});
+
+export class LooperEngine extends EventTarget {
+  constructor() {
+    super();
+    this.state = STATES.IDLE;
+    this.context = null;
+    this.stream = null;
+    this.micSource = null;
+    this.recorder = null;
+    this.inputAnalyser = null;
+    this.outputAnalyser = null;
+    this.masterGain = null;
+    this.monitorGain = null;
+    this.layers = [];
+    this.loopLength = 0;
+    this.playbackOrigin = null;
+    this.nextCycleIndex = 0;
+    this.schedulerTimer = null;
+    this.schedulerAhead = 0.25;
+    this.schedulerInterval = 25;
+    this.activeSources = new Set();
+    this.recordingStartedAt = null;
+    this.firstRecordingStartTime = null;
+    this.firstRecordingEndTime = null;
+    this.lastOverdubStart = null;
+    this.lastOverdubEnd = null;
+    this.monitorEnabled = false;
+    this.loopCount = 0;
+    this.lastReportedLoop = 0;
+    this.layerSequence = 0;
+    this.requestedConstraints = REQUESTED_CONSTRAINTS;
+    this.meterBuffers = new WeakMap();
+  }
+
+  async initialize() {
+    if (!window.AudioContext && !window.webkitAudioContext) {
+      throw new Error('Web Audio API is not supported.');
+    }
+    if (!navigator.mediaDevices?.getUserMedia) {
+      throw new Error('Microphone input is not supported. Use HTTPS on iPhone Safari.');
+    }
+
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    try {
+      this.context = new AudioContextClass({ latencyHint: 'interactive' });
+    } catch (_) {
+      this.context = new AudioContextClass();
+    }
+    this.log('AudioContext created');
+    await this.context.resume();
+
+    try {
+      this.stream = await navigator.mediaDevices.getUserMedia({ audio: REQUESTED_CONSTRAINTS });
+      this.log('Microphone permission granted');
+    } catch (firstError) {
+      this.log(`Requested constraints failed: ${firstError.name}`);
+      this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      this.log('Microphone permission granted (fallback constraints)');
+    }
+
+    this.micSource = this.context.createMediaStreamSource(this.stream);
+    this.inputAnalyser = this.context.createAnalyser();
+    this.inputAnalyser.fftSize = 1024;
+    this.inputAnalyser.smoothingTimeConstant = 0.72;
+    this.outputAnalyser = this.context.createAnalyser();
+    this.outputAnalyser.fftSize = 1024;
+    this.outputAnalyser.smoothingTimeConstant = 0.76;
+    this.masterGain = this.context.createGain();
+    this.monitorGain = this.context.createGain();
+    this.monitorGain.gain.value = 0;
+
+    this.micSource.connect(this.inputAnalyser);
+    this.micSource.connect(this.monitorGain);
+    this.monitorGain.connect(this.masterGain);
+    this.masterGain.connect(this.outputAnalyser);
+    this.outputAnalyser.connect(this.context.destination);
+
+    this.recorder = new PCMRecorder(this.context, this.micSource, (message) => this.log(message));
+    await this.recorder.initialize();
+    this.setMasterVolume(0.82);
+    this.installLifecycleListeners();
+    this.emit('initialized', this.getDebugInfo());
+    this.setState(STATES.IDLE);
+    return this.getDebugInfo();
+  }
+
+  installLifecycleListeners() {
+    this.context.addEventListener('statechange', () => {
+      this.log(`AudioContext state: ${this.context.state}`);
+      this.emit('contextstate', { state: this.context.state });
+    });
+    this.stream.getAudioTracks().forEach((track) => {
+      track.addEventListener('ended', () => {
+        this.fail(new Error('Microphone was disconnected.'));
+      });
+    });
+  }
+
+  setState(state) {
+    this.state = state;
+    this.emit('statechange', { state });
+  }
+
+  async startFirstRecording() {
+    this.assertState(STATES.IDLE);
+    this.recordingStartedAt = this.recorder.start();
+    this.firstRecordingStartTime = this.recordingStartedAt;
+    this.log('First recording start');
+    this.setState(STATES.FIRST_RECORDING);
+  }
+
+  async finishFirstRecording() {
+    this.assertState(STATES.FIRST_RECORDING);
+    const capture = await this.recorder.stop();
+    if (capture.samples.length < this.context.sampleRate * 0.2) {
+      this.setState(STATES.IDLE);
+      throw new Error('Recording is too short. Record at least 0.2 seconds.');
+    }
+    this.firstRecordingStartTime = capture.startTime;
+    this.firstRecordingEndTime = capture.endTime;
+    this.loopLength = capture.samples.length / this.context.sampleRate;
+    const buffer = this.createBuffer(capture.samples);
+    this.layers = [this.createLayer('FIRST LOOP', buffer)];
+    this.log('First recording stop');
+    this.log(`Loop length = ${this.loopLength.toFixed(3)} sec`);
+    this.startPlayback();
+    this.emit('layerschange', { layers: this.getLayers() });
+    return this.layers[0];
+  }
+
+  startPlayback() {
+    if (!this.layers.length) return;
+    this.stopScheduledSources();
+    this.playbackOrigin = this.context.currentTime + 0.06;
+    this.nextCycleIndex = 0;
+    this.loopCount = 0;
+    this.lastReportedLoop = 0;
+    this.schedulerTimer = window.setInterval(() => this.scheduleAhead(), this.schedulerInterval);
+    this.setState(STATES.PLAYING);
+    this.scheduleAhead();
+    this.log(`Loop playback scheduled at ${this.playbackOrigin.toFixed(3)}`);
+  }
+
+  scheduleAhead() {
+    if (!this.context || !this.loopLength || this.state === STATES.STOPPED || this.state === STATES.IDLE) return;
+    const horizon = this.context.currentTime + this.schedulerAhead;
+    while (this.playbackOrigin + this.nextCycleIndex * this.loopLength <= horizon) {
+      const cycleTime = this.playbackOrigin + this.nextCycleIndex * this.loopLength;
+      if (cycleTime >= this.context.currentTime - 0.01) this.scheduleCycle(cycleTime, this.nextCycleIndex);
+      this.nextCycleIndex += 1;
+    }
+  }
+
+  scheduleCycle(when, cycleIndex) {
+    // JavaScriptタイマーは先読みのきっかけにだけ使い、実際の発音時刻はAudioContextへ予約する。
+    this.layers.forEach((layer) => {
+      const source = this.context.createBufferSource();
+      source.buffer = layer.buffer;
+      source.connect(this.masterGain);
+      const entry = { source, layerId: layer.id, cycleIndex };
+      this.activeSources.add(entry);
+      source.onended = () => {
+        this.activeSources.delete(entry);
+        source.disconnect();
+      };
+      source.start(when);
+    });
+  }
+
+  stopPlayback() {
+    if (![STATES.PLAYING, STATES.OVERDUB_RECORDING].includes(this.state)) return;
+    if (this.state === STATES.OVERDUB_RECORDING) this.recorder.cancel();
+    this.clearScheduler();
+    this.stopScheduledSources();
+    this.log('Playback stopped');
+    this.setState(STATES.STOPPED);
+  }
+
+  resumePlayback() {
+    this.assertState(STATES.STOPPED);
+    this.startPlayback();
+  }
+
+  async startOverdub() {
+    this.assertState(STATES.PLAYING);
+    this.recordingStartedAt = this.recorder.start();
+    this.lastOverdubStart = this.recordingStartedAt;
+    this.log('Overdub start');
+    this.setState(STATES.OVERDUB_RECORDING);
+  }
+
+  async finishOverdub() {
+    this.assertState(STATES.OVERDUB_RECORDING);
+    this.log('Overdub end requested');
+    const capture = await this.recorder.stop();
+    this.lastOverdubStart = capture.startTime;
+    this.lastOverdubEnd = capture.endTime;
+    if (!capture.samples.length) {
+      this.setState(STATES.PLAYING);
+      throw new Error('No overdub audio was captured.');
+    }
+
+    const loopSamples = Math.max(1, Math.round(this.loopLength * this.context.sampleRate));
+    const aligned = new Float32Array(loopSamples);
+    const phase = this.getPhaseAt(capture.startTime);
+    const startOffset = Math.round(phase * this.context.sampleRate) % loopSamples;
+    // 録音開始位置をループ内の位相へ戻し、周回をまたいでも同じ長さのレイヤーへ配置する。
+    for (let index = 0; index < capture.samples.length; index += 1) {
+      const target = (startOffset + index) % loopSamples;
+      const fadeSamples = Math.min(Math.round(this.context.sampleRate * 0.008), Math.floor(capture.samples.length / 2));
+      const edgeGain = Math.min(1, index / Math.max(1, fadeSamples), (capture.samples.length - 1 - index) / Math.max(1, fadeSamples));
+      aligned[target] = Math.max(-1, Math.min(1, aligned[target] + capture.samples[index] * edgeGain));
+    }
+    const layer = this.createLayer('OVERDUB', this.createBuffer(aligned));
+    this.layers.push(layer);
+    this.log(`Overdub added (Layer ${this.layers.length})`);
+    this.setState(STATES.PLAYING);
+    this.emit('layerschange', { layers: this.getLayers() });
+    return layer;
+  }
+
+  undo() {
+    if (this.layers.length <= 1 || this.state === STATES.OVERDUB_RECORDING) return false;
+    const removed = this.layers.pop();
+    this.activeSources.forEach((entry) => {
+      if (entry.layerId === removed.id) {
+        try { entry.source.stop(); } catch (_) { /* already stopped */ }
+      }
+    });
+    this.log(`Undo: removed Layer ${this.layers.length + 1}`);
+    this.emit('layerschange', { layers: this.getLayers() });
+    return true;
+  }
+
+  clear() {
+    this.recorder?.cancel();
+    this.clearScheduler();
+    this.stopScheduledSources();
+    this.layers = [];
+    this.loopLength = 0;
+    this.playbackOrigin = null;
+    this.loopCount = 0;
+    this.firstRecordingStartTime = null;
+    this.firstRecordingEndTime = null;
+    this.lastOverdubStart = null;
+    this.lastOverdubEnd = null;
+    this.log('All loop data cleared');
+    this.setState(STATES.IDLE);
+    this.emit('layerschange', { layers: [] });
+  }
+
+  createTestLoop() {
+    if (this.state !== STATES.IDLE) throw new Error('Clear the current loop before starting test mode.');
+    const duration = 4;
+    const length = Math.round(this.context.sampleRate * duration);
+    const samples = new Float32Array(length);
+    for (let beat = 0; beat < 4; beat += 1) {
+      const start = Math.round(beat * this.context.sampleRate);
+      const frequency = beat === 0 ? 1320 : 880;
+      const clickLength = Math.round(this.context.sampleRate * 0.035);
+      for (let i = 0; i < clickLength; i += 1) {
+        samples[start + i] = Math.sin(2 * Math.PI * frequency * i / this.context.sampleRate) * Math.exp(-i / (this.context.sampleRate * 0.008)) * 0.55;
+      }
+    }
+    this.loopLength = duration;
+    this.layers = [this.createLayer('TEST CLICK', this.createBuffer(samples))];
+    this.firstRecordingStartTime = this.context.currentTime;
+    this.firstRecordingEndTime = this.context.currentTime + duration;
+    this.log('Loop test mode: 4.000 sec click loop created');
+    this.emit('layerschange', { layers: this.getLayers() });
+    this.startPlayback();
+  }
+
+  createBuffer(samples) {
+    const buffer = this.context.createBuffer(1, samples.length, this.context.sampleRate);
+    buffer.copyToChannel(samples, 0);
+    return buffer;
+  }
+
+  createLayer(type, buffer) {
+    this.layerSequence += 1;
+    return { id: this.layerSequence, type, buffer, duration: buffer.duration, createdAt: this.context.currentTime };
+  }
+
+  getPhaseAt(time = this.context?.currentTime ?? 0) {
+    if (!this.playbackOrigin || !this.loopLength || time < this.playbackOrigin) return 0;
+    return (time - this.playbackOrigin) % this.loopLength;
+  }
+
+  getCurrentPosition() {
+    return this.getPhaseAt();
+  }
+
+  getCurrentLoopNumber() {
+    if (!this.playbackOrigin || !this.loopLength || this.context.currentTime < this.playbackOrigin) return 0;
+    return Math.floor((this.context.currentTime - this.playbackOrigin) / this.loopLength) + 1;
+  }
+
+  updateLoopCount() {
+    const count = this.getCurrentLoopNumber();
+    this.loopCount = count;
+    if (count > 0 && count !== this.lastReportedLoop) {
+      this.lastReportedLoop = count;
+      this.log(`Loop #${count}`);
+      this.emit('loop', { count });
+    }
+    return count;
+  }
+
+  getLoopLength() { return this.loopLength; }
+  getLayers() { return this.layers.map(({ id, type, duration }) => ({ id, type, duration })); }
+
+  setMasterVolume(value) {
+    const normalized = Math.max(0, Math.min(1, Number(value)));
+    if (this.masterGain && this.context) {
+      this.masterGain.gain.setTargetAtTime(normalized, this.context.currentTime, 0.01);
+    }
+  }
+
+  setMonitor(enabled) {
+    this.monitorEnabled = Boolean(enabled);
+    if (this.monitorGain && this.context) {
+      this.monitorGain.gain.setTargetAtTime(this.monitorEnabled ? 1 : 0, this.context.currentTime, 0.01);
+    }
+    this.log(`Mic monitor ${this.monitorEnabled ? 'ON' : 'OFF'}`);
+    this.emit('monitorchange', { enabled: this.monitorEnabled });
+  }
+
+  async resumeAudio() {
+    await this.context.resume();
+    this.log('AudioContext resume requested by user');
+    return this.context.state;
+  }
+
+  getMeterLevel(analyser) {
+    if (!analyser) return { rms: 0, peak: 0 };
+    let data = this.meterBuffers.get(analyser);
+    if (!data || data.length !== analyser.fftSize) {
+      data = new Float32Array(analyser.fftSize);
+      this.meterBuffers.set(analyser, data);
+    }
+    analyser.getFloatTimeDomainData(data);
+    let sum = 0;
+    let peak = 0;
+    for (const sample of data) {
+      sum += sample * sample;
+      peak = Math.max(peak, Math.abs(sample));
+    }
+    return { rms: Math.sqrt(sum / data.length), peak };
+  }
+
+  getInputLevel() { return this.getMeterLevel(this.inputAnalyser); }
+  getOutputLevel() { return this.getMeterLevel(this.outputAnalyser); }
+
+  getDebugInfo() {
+    const track = this.stream?.getAudioTracks?.()[0];
+    return {
+      context: {
+        state: this.context?.state ?? 'N/A',
+        sampleRate: this.context?.sampleRate ?? 'N/A',
+        baseLatency: this.context?.baseLatency ?? 'N/A',
+        outputLatency: this.context?.outputLatency ?? 'N/A',
+        currentTime: this.context?.currentTime ?? 0,
+      },
+      microphone: {
+        label: track?.label || 'N/A',
+        settings: track?.getSettings?.() || {},
+        requested: REQUESTED_CONSTRAINTS,
+      },
+      recorder: this.recorder?.mode ?? 'N/A',
+      timing: {
+        loopLength: this.loopLength,
+        loopNumber: this.getCurrentLoopNumber(),
+        loopPosition: this.getCurrentPosition(),
+        firstRecordingStart: this.firstRecordingStartTime,
+        firstRecordingEnd: this.firstRecordingEndTime,
+        playbackStart: this.playbackOrigin,
+        lastOverdubStart: this.lastOverdubStart,
+        lastOverdubEnd: this.lastOverdubEnd,
+        schedulingAhead: this.schedulerAhead,
+      },
+    };
+  }
+
+  exportWav() {
+    if (!this.layers.length) throw new Error('No loop data to export.');
+    const length = Math.max(...this.layers.map((layer) => layer.buffer.length));
+    const mixed = new Float32Array(length);
+    this.layers.forEach((layer) => {
+      const data = layer.buffer.getChannelData(0);
+      for (let index = 0; index < Math.min(length, data.length); index += 1) mixed[index] += data[index];
+    });
+    let peak = 1;
+    mixed.forEach((sample) => { peak = Math.max(peak, Math.abs(sample)); });
+    const buffer = new ArrayBuffer(44 + length * 2);
+    const view = new DataView(buffer);
+    const write = (offset, text) => [...text].forEach((char, index) => view.setUint8(offset + index, char.charCodeAt(0)));
+    write(0, 'RIFF'); view.setUint32(4, 36 + length * 2, true); write(8, 'WAVE'); write(12, 'fmt ');
+    view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true);
+    view.setUint32(24, this.context.sampleRate, true); view.setUint32(28, this.context.sampleRate * 2, true);
+    view.setUint16(32, 2, true); view.setUint16(34, 16, true); write(36, 'data'); view.setUint32(40, length * 2, true);
+    for (let index = 0; index < length; index += 1) {
+      const sample = Math.max(-1, Math.min(1, mixed[index] / peak));
+      view.setInt16(44 + index * 2, sample < 0 ? sample * 0x8000 : sample * 0x7fff, true);
+    }
+    return new Blob([view], { type: 'audio/wav' });
+  }
+
+  clearScheduler() {
+    if (this.schedulerTimer) window.clearInterval(this.schedulerTimer);
+    this.schedulerTimer = null;
+  }
+
+  stopScheduledSources() {
+    this.activeSources.forEach(({ source }) => {
+      source.onended = null;
+      try { source.stop(); } catch (_) { /* source may already be stopped */ }
+      source.disconnect();
+    });
+    this.activeSources.clear();
+  }
+
+  assertState(...allowed) {
+    if (!allowed.includes(this.state)) throw new Error(`Invalid state: ${this.state}`);
+  }
+
+  fail(error) {
+    this.clearScheduler();
+    this.stopScheduledSources();
+    this.setState(STATES.ERROR);
+    this.emit('error', { error });
+  }
+
+  log(message) {
+    this.emit('log', { message, time: new Date() });
+  }
+
+  emit(type, detail) {
+    this.dispatchEvent(new CustomEvent(type, { detail }));
+  }
+
+  destroy() {
+    this.clearScheduler();
+    this.stopScheduledSources();
+    this.recorder?.destroy();
+    this.stream?.getTracks().forEach((track) => track.stop());
+    this.context?.close();
+  }
+}
