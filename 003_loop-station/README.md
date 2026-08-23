@@ -22,7 +22,7 @@ PCでは `http://localhost:8000/003_loop-station/` を開きます。iPhoneか�
 2. Safariのマイク使用確認で「許可」を選びます。
 3. 大型ボタンの「REC」をタップし、声や楽器を録音します。
 4. 初期設定では1小節の「1・2・3・4」カウント後、次の1拍目から自動録音します。
-5. 「STOP & LOOP」をタップすると次の小節頭まで録音し、その長さがMaster Loopになって再生が始まります。
+5. 「STOP & LOOP」をタップすると、初期設定のSMARTがSTOP位置に最も近い小節境界を選び、その長さがMaster Loopになって再生が始まります。
 6. 再生中に「OVERDUB」をタップすると次の小節頭から追加録音し、「END OVERDUB」で次の小節頭にレイヤーを確定します。
 
 マイクモニターはハウリング防止のため初期値OFFです。イヤホンを使用しない状態でのONには注意してください。
@@ -33,10 +33,18 @@ PCでは `http://localhost:8000/003_loop-station/` を開きます。iPhoneか�
 - **拍子**: Phase 1では4/4固定です。画面の4つのビート表示で現在の拍を確認できます。
 - **COUNT IN**: OFF／1 BAR／2 BAR。初期値は1 BARです。
 - **METRONOME**: OFF／COUNT-IN ONLY／ALWAYS。初期値はクリック音の録音混入を抑えるCOUNT-IN ONLYです。
-- **BAR QUANTIZE**: First Loopの終了を次の小節頭へ揃えます。初期値ONです。
-- **QUANTIZED OVERDUB**: オーバーダブ開始と終了を次の小節頭へ揃えます。初期値ONです。
+- **RECORD END**: SMART／NEXT BAR／FREE。初期値はSMARTです。
+- **QUANTIZED OVERDUB**: 次の小節頭から開始し、Master Loopの最寄り周回境界で終了します。初期値ONです。
 
 メトロノーム音はWeb Audio APIで生成し、AudioContextの時間軸へ先読み予約します。iPhone本体スピーカーのクリック音を本体マイクが拾う場合があるため、メトロノーム使用時はイヤホンを推奨します。
+
+### RECORD END
+
+- **SMART**: STOP位置が小節前半なら直前の小節境界へ戻し、後半なら現在小節の終端まで録音します。判定閾値は50%です。最低1小節を保証します。
+- **NEXT BAR**: STOP後、従来どおり次の小節終端まで録音します。
+- **FREE**: 小節補正を行わず、STOP位置をそのままループ終端にします。
+
+SMARTは音量や無音を解析しません。カウントイン終了後の実録音開始時刻とSTOP要求時刻だけから保存小節数を決定し、最終AudioBufferを正確な小節長へトリミングします。
 
 ## 操作
 
@@ -62,6 +70,7 @@ JavaScriptタイマーは約250ms先までのイベントを確認するため�
 - 要求した音声補正OFFと、Safariが採用した実値
 - Master Loop長、周回数、現在位置、録音・再生時刻、先読み時間
 - BPM、1拍の秒数、現在の拍・小節、次の予約拍、カウントイン、クオンタイズ待機時刻
+- STOP要求時刻、Raw Bar Position、Completed Bars、Bar Progress、SMART判定結果、録音前後のBuffer長
 - User Agent、画面サイズ、DPR、visibility state
 - 最大150件のイベントログとLOG COPY
 - レイテンシーAPI参考値

@@ -72,9 +72,12 @@ const elements = {
   countdownSubtext: $('#countdownSubtext'),
   countInSelect: $('#countInSelect'),
   metronomeSelect: $('#metronomeSelect'),
-  barQuantizeButton: $('#barQuantizeButton'),
+  recordEndSelect: $('#recordEndSelect'),
   overdubQuantizeButton: $('#overdubQuantizeButton'),
   tempoDebug: $('#tempoDebug'),
+  recordingProgress: $('#recordingProgress'),
+  recBarLabel: $('#recBarLabel'),
+  completedBarsLabel: $('#completedBarsLabel'),
 };
 
 const stateView = {
@@ -120,10 +123,7 @@ elements.bpmButtons.forEach((button) => button.addEventListener('click', () => {
 elements.tapTempoButton.addEventListener('click', tapTempo);
 elements.countInSelect.addEventListener('change', () => engine.setCountInBars(Number(elements.countInSelect.value)));
 elements.metronomeSelect.addEventListener('change', () => engine.setMetronomeMode(elements.metronomeSelect.value));
-elements.barQuantizeButton.addEventListener('click', () => {
-  engine.setBarQuantize(!engine.barQuantize);
-  renderSettingToggles();
-});
+elements.recordEndSelect.addEventListener('change', () => engine.setRecordEndMode(elements.recordEndSelect.value));
 elements.overdubQuantizeButton.addEventListener('click', () => {
   engine.setQuantizedOverdub(!engine.quantizedOverdub);
   renderSettingToggles();
@@ -148,6 +148,7 @@ engine.addEventListener('error', ({ detail }) => showError(detail.error));
 engine.addEventListener('recordingstart', () => {
   goUntil = performance.now() + 420;
 });
+engine.addEventListener('recordingendplan', ({ detail }) => renderEndPlan(detail));
 
 document.addEventListener('visibilitychange', () => {
   addLog(`Visibility state: ${document.visibilityState}`);
@@ -225,7 +226,7 @@ function renderState(state) {
   elements.bpmButtons.forEach((button) => { button.disabled = tempoLocked; });
   elements.tapTempoButton.disabled = tempoLocked;
   elements.countInSelect.disabled = state !== STATES.IDLE;
-  elements.barQuantizeButton.disabled = state !== STATES.IDLE;
+  elements.recordEndSelect.disabled = state !== STATES.IDLE;
   elements.overdubQuantizeButton.disabled = ![STATES.IDLE, STATES.PLAYING, STATES.STOPPED].includes(state);
   elements.statusAudio.textContent = engine.context?.state?.toUpperCase() || 'N/A';
   elements.statusRecorder.textContent = recording ? 'RECORDING' : (pending ? 'ARMED' : (engine.recorder?.mode || 'N/A').toUpperCase());
@@ -234,7 +235,7 @@ function renderState(state) {
     showNotice('ENDING', 'Loop ends at next bar.', false);
   } else if (state === STATES.OVERDUB_PENDING) {
     showNotice('STARTING', 'Overdub starts at next bar.', false);
-  } else if (['ENDING', 'STARTING'].includes(elements.noticeTitle.textContent)) {
+  } else if (['ENDING', 'STARTING', 'FINISHING…', 'STOP REQUESTED'].includes(elements.noticeTitle.textContent)) {
     hideNotice();
   }
   renderLayers();
@@ -323,6 +324,14 @@ function updateTempoDisplay() {
   const displayBar = firstRecording ? Math.max(1, position.bar - tempo.countInBars) : position.bar;
   elements.barNumber.textContent = displayBar > 0 ? String(displayBar) : '—';
   elements.beatDots.forEach((dot, index) => dot.classList.toggle('is-active', position.beat === index + 1));
+  const firstRecordingActive = [STATES.FIRST_RECORDING, STATES.FIRST_RECORDING_ENDING].includes(engine.state);
+  elements.recordingProgress.hidden = !firstRecordingActive;
+  if (firstRecordingActive) {
+    const elapsed = Math.max(0, engine.context.currentTime - engine.firstRecordingStartTime);
+    const rawBars = elapsed / tempo.getBarDuration();
+    elements.recBarLabel.textContent = `REC BAR ${Math.floor(rawBars) + 1}`;
+    elements.completedBarsLabel.textContent = `Completed Bars: ${Math.floor(rawBars)}`;
+  }
 
   if (engine.state === STATES.COUNT_IN) {
     elements.countdownOverlay.hidden = false;
@@ -396,6 +405,19 @@ function renderDebug() {
     'Quantized Overdub': info.tempo.quantizedOverdub,
     'Pending Recording Start': formatSeconds(info.tempo.pendingRecordingStart),
     'Pending Recording Stop': formatSeconds(info.tempo.pendingRecordingStop),
+    'Record End Mode': info.recordingEnd.mode,
+    'Recording Start Time': formatSeconds(info.recordingEnd.recordingStartTime),
+    'Stop Request Time': formatSeconds(info.recordingEnd.stopRequestTime),
+    'Elapsed Recording Time': formatSeconds(info.recordingEnd.elapsedRecordingTime),
+    'Seconds Per Bar': formatSeconds(info.recordingEnd.secondsPerBar),
+    'Raw Bar Position': formatDecimal(info.recordingEnd.rawBarPosition),
+    'Completed Bars': valueOrNA(info.recordingEnd.completedBars),
+    'Bar Progress': formatDecimal(info.recordingEnd.barProgress),
+    'Smart End Threshold': formatDecimal(info.recordingEnd.smartEndThreshold),
+    'Calculated Target Bars': formatDecimal(info.recordingEnd.calculatedTargetBars),
+    'Calculated Loop Length': formatSeconds(info.recordingEnd.calculatedLoopLength),
+    'Actual Recorded Buffer Length': formatSeconds(info.recordingEnd.actualRecordedBufferLength),
+    'Final Trimmed Buffer Length': formatSeconds(info.recordingEnd.finalTrimmedBufferLength),
   });
   fillDebugList(elements.deviceDebug, {
     'User Agent': navigator.userAgent,
@@ -436,6 +458,7 @@ function renderTempoSettings() {
   elements.bpmValue.textContent = String(engine.tempo.bpm);
   elements.countInSelect.value = String(engine.tempo.countInBars);
   elements.metronomeSelect.value = engine.tempo.metronomeMode;
+  elements.recordEndSelect.value = engine.recordEndMode;
   renderSettingToggles();
 }
 
@@ -444,8 +467,21 @@ function renderSettingToggles() {
     button.setAttribute('aria-pressed', String(enabled));
     button.textContent = enabled ? 'ON' : 'OFF';
   };
-  apply(elements.barQuantizeButton, engine.barQuantize);
   apply(elements.overdubQuantizeButton, engine.quantizedOverdub);
+}
+
+function renderEndPlan(plan) {
+  const bars = Number.isInteger(plan.calculatedTargetBars)
+    ? String(plan.calculatedTargetBars)
+    : plan.calculatedTargetBars.toFixed(2);
+  const title = plan.shouldContinueRecording ? 'FINISHING…' : 'STOP REQUESTED';
+  const message = plan.mode === 'FREE'
+    ? `SAVE FREE LENGTH (${plan.calculatedLoopLength.toFixed(3)} sec)`
+    : `SAVE AS ${bars} ${bars === '1' ? 'BAR' : 'BARS'}`;
+  showNotice(title, message, false);
+  if (plan.shouldContinueRecording) {
+    elements.loopAction.textContent = `FINISHING BAR ${bars}…`;
+  }
 }
 
 function renderRecordingIndicator(state) {
@@ -551,6 +587,10 @@ function formatSeconds(value) {
 
 function formatHz(value) {
   return Number.isFinite(value) ? `${value} Hz` : 'N/A';
+}
+
+function formatDecimal(value) {
+  return Number.isFinite(value) ? Number(value).toFixed(3) : 'N/A';
 }
 
 function valueOrNA(value) {

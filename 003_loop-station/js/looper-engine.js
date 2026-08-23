@@ -14,6 +14,14 @@ export const STATES = Object.freeze({
   ERROR: 'ERROR',
 });
 
+export const RECORD_END_MODES = Object.freeze({
+  SMART: 'SMART',
+  NEXT_BAR: 'NEXT_BAR',
+  FREE: 'FREE',
+});
+
+export const SMART_END_THRESHOLD = 0.5;
+
 const REQUESTED_CONSTRAINTS = Object.freeze({
   echoCancellation: false,
   noiseSuppression: false,
@@ -52,11 +60,13 @@ export class LooperEngine extends EventTarget {
     this.layerSequence = 0;
     this.requestedConstraints = REQUESTED_CONSTRAINTS;
     this.meterBuffers = new WeakMap();
-    this.barQuantize = true;
+    this.recordEndMode = RECORD_END_MODES.SMART;
+    this.smartEndThreshold = SMART_END_THRESHOLD;
     this.quantizedOverdub = true;
     this.pendingRecordingStart = null;
     this.pendingRecordingStop = null;
     this.actionTimers = new Set();
+    this.recordingEndDebug = this.createEmptyRecordingEndDebug();
   }
 
   async initialize() {
@@ -155,27 +165,37 @@ export class LooperEngine extends EventTarget {
 
   async finishFirstRecording() {
     this.assertState(STATES.FIRST_RECORDING);
-    this.log('First recording end requested');
-    const stopTime = this.barQuantize
-      ? this.tempo.getNextBarTime(this.context.currentTime + 0.04)
-      : this.context.currentTime;
-    this.pendingRecordingStop = stopTime;
-    if (this.barQuantize) {
-      this.log(`Loop ends at next bar @ ${stopTime.toFixed(3)}`);
-      this.setState(STATES.FIRST_RECORDING_ENDING);
+    const stopRequestTime = this.context.currentTime;
+    const plan = this.calculateFirstRecordingEnd(stopRequestTime);
+    this.recordingEndDebug = { ...plan };
+    this.log('STOP requested');
+    this.log(`Raw position = ${plan.rawBarPosition.toFixed(3)} bars`);
+    this.log(`Completed bars = ${plan.completedBars}`);
+    this.log(`Bar progress = ${plan.barProgress.toFixed(3)}`);
+    this.log(`${plan.mode === RECORD_END_MODES.SMART ? 'Smart target' : 'Target'} = ${formatBars(plan.calculatedTargetBars)} bars`);
+    if (plan.shouldContinueRecording) {
+      this.log(`Continue recording until bar ${plan.calculatedTargetBars} end`);
+    } else if (plan.mode !== RECORD_END_MODES.FREE) {
+      this.log(`Trimming recording to ${plan.calculatedTargetBars} bars`);
     }
-    const capture = await this.recorder.stopAt(stopTime);
+    this.pendingRecordingStop = plan.captureStopTime;
+    this.setState(STATES.FIRST_RECORDING_ENDING);
+    this.emit('recordingendplan', { type: 'first', ...plan });
+    const capture = await this.recorder.stopAt(plan.captureStopTime);
     this.pendingRecordingStop = null;
     if (capture.samples.length < this.context.sampleRate * 0.2) {
       this.setState(STATES.IDLE);
       throw new Error('Recording is too short. Record at least 0.2 seconds.');
     }
-    this.firstRecordingStartTime = capture.startTime;
-    this.firstRecordingEndTime = capture.endTime;
-    this.loopLength = capture.samples.length / this.context.sampleRate;
-    const buffer = this.createBuffer(capture.samples);
+    const finalSamples = this.trimCaptureToPlan(capture.samples, plan);
+    this.recordingEndDebug.actualRecordedBufferLength = capture.samples.length / this.context.sampleRate;
+    this.recordingEndDebug.finalTrimmedBufferLength = finalSamples.length / this.context.sampleRate;
+    this.firstRecordingStartTime = this.firstRecordingStartTime ?? capture.startTime;
+    this.firstRecordingEndTime = this.firstRecordingStartTime + finalSamples.length / this.context.sampleRate;
+    const buffer = this.createBuffer(finalSamples);
+    this.loopLength = buffer.duration;
     this.layers = [this.createLayer('FIRST LOOP', buffer)];
-    this.log('First recording stop');
+    this.log(`Recording finalized at ${formatBars(plan.calculatedTargetBars)} bars`);
     this.log(`Loop length = ${this.loopLength.toFixed(3)} sec`);
     this.startPlayback();
     this.emit('layerschange', { layers: this.getLayers() });
@@ -263,20 +283,23 @@ export class LooperEngine extends EventTarget {
 
   async finishOverdub() {
     this.assertState(STATES.OVERDUB_RECORDING);
-    this.log('Overdub end requested');
-    const stopTime = this.quantizedOverdub
-      ? this.tempo.getNextBarTime(this.context.currentTime + 0.04)
-      : this.context.currentTime;
-    this.pendingRecordingStop = stopTime;
-    if (this.quantizedOverdub) {
-      this.log(`Overdub ends at next bar @ ${stopTime.toFixed(3)}`);
-      this.setState(STATES.OVERDUB_ENDING);
-    }
-    const capture = await this.recorder.stopAt(stopTime);
+    const stopRequestTime = this.context.currentTime;
+    const plan = this.calculateOverdubEnd(stopRequestTime);
+    this.recordingEndDebug = { ...plan };
+    this.log('Overdub STOP requested');
+    this.log(`Overdub raw position = ${plan.rawBarPosition.toFixed(3)} bars`);
+    this.log(`Overdub target = ${formatBars(plan.calculatedTargetBars)} bars`);
+    this.pendingRecordingStop = plan.captureStopTime;
+    this.setState(STATES.OVERDUB_ENDING);
+    this.emit('recordingendplan', { type: 'overdub', ...plan });
+    const capture = await this.recorder.stopAt(plan.captureStopTime);
     this.pendingRecordingStop = null;
     this.lastOverdubStart = capture.startTime;
     this.lastOverdubEnd = capture.endTime;
-    if (!capture.samples.length) {
+    const finalCaptureSamples = this.trimCaptureToPlan(capture.samples, plan);
+    this.recordingEndDebug.actualRecordedBufferLength = capture.samples.length / this.context.sampleRate;
+    this.recordingEndDebug.finalTrimmedBufferLength = finalCaptureSamples.length / this.context.sampleRate;
+    if (!finalCaptureSamples.length) {
       this.setState(STATES.PLAYING);
       throw new Error('No overdub audio was captured.');
     }
@@ -286,11 +309,11 @@ export class LooperEngine extends EventTarget {
     const phase = this.getPhaseAt(capture.startTime);
     const startOffset = Math.round(phase * this.context.sampleRate) % loopSamples;
     // 録音開始位置をループ内の位相へ戻し、周回をまたいでも同じ長さのレイヤーへ配置する。
-    for (let index = 0; index < capture.samples.length; index += 1) {
+    for (let index = 0; index < finalCaptureSamples.length; index += 1) {
       const target = (startOffset + index) % loopSamples;
-      const fadeSamples = Math.min(Math.round(this.context.sampleRate * 0.008), Math.floor(capture.samples.length / 2));
-      const edgeGain = Math.min(1, index / Math.max(1, fadeSamples), (capture.samples.length - 1 - index) / Math.max(1, fadeSamples));
-      aligned[target] = Math.max(-1, Math.min(1, aligned[target] + capture.samples[index] * edgeGain));
+      const fadeSamples = Math.min(Math.round(this.context.sampleRate * 0.008), Math.floor(finalCaptureSamples.length / 2));
+      const edgeGain = Math.min(1, index / Math.max(1, fadeSamples), (finalCaptureSamples.length - 1 - index) / Math.max(1, fadeSamples));
+      aligned[target] = Math.max(-1, Math.min(1, aligned[target] + finalCaptureSamples[index] * edgeGain));
     }
     const layer = this.createLayer('OVERDUB', this.createBuffer(aligned));
     this.layers.push(layer);
@@ -328,6 +351,7 @@ export class LooperEngine extends EventTarget {
     this.lastOverdubEnd = null;
     this.pendingRecordingStart = null;
     this.pendingRecordingStop = null;
+    this.recordingEndDebug = this.createEmptyRecordingEndDebug();
     this.tempo?.alignTo(this.context.currentTime + 0.08);
     this.log('All loop data cleared');
     this.setState(STATES.IDLE);
@@ -426,9 +450,15 @@ export class LooperEngine extends EventTarget {
     this.tempo.setMetronomeMode(mode);
   }
 
+  setRecordEndMode(mode) {
+    if (!Object.values(RECORD_END_MODES).includes(mode)) return;
+    this.recordEndMode = mode;
+    this.recordingEndDebug.mode = mode;
+    this.log(`Record end mode = ${mode}`);
+  }
+
   setBarQuantize(enabled) {
-    this.barQuantize = Boolean(enabled);
-    this.log(`Bar quantize ${this.barQuantize ? 'ON' : 'OFF'}`);
+    this.setRecordEndMode(enabled ? RECORD_END_MODES.NEXT_BAR : RECORD_END_MODES.FREE);
   }
 
   setQuantizedOverdub(enabled) {
@@ -491,11 +521,12 @@ export class LooperEngine extends EventTarget {
       },
       tempo: {
         ...this.tempo?.getDebugInfo(),
-        quantizeMode: this.barQuantize ? 'BAR' : 'OFF',
+        quantizeMode: this.recordEndMode,
         quantizedOverdub: this.quantizedOverdub,
         pendingRecordingStart: this.pendingRecordingStart,
         pendingRecordingStop: this.pendingRecordingStop,
       },
+      recordingEnd: { ...this.recordingEndDebug },
     };
   }
 
@@ -556,6 +587,103 @@ export class LooperEngine extends EventTarget {
     this.dispatchEvent(new CustomEvent(type, { detail }));
   }
 
+  calculateFirstRecordingEnd(stopRequestTime) {
+    return this.calculateRecordingEndPlan({
+      recordingStartTime: this.firstRecordingStartTime,
+      stopRequestTime,
+      unitDuration: this.tempo.getBarDuration(),
+      mode: this.recordEndMode,
+      unitBars: 1,
+    });
+  }
+
+  calculateOverdubEnd(stopRequestTime) {
+    if (!this.quantizedOverdub) {
+      return this.calculateRecordingEndPlan({
+        recordingStartTime: this.lastOverdubStart,
+        stopRequestTime,
+        unitDuration: this.tempo.getBarDuration(),
+        mode: RECORD_END_MODES.FREE,
+        unitBars: 1,
+      });
+    }
+    const secondsPerBar = this.tempo.getBarDuration();
+    const masterBars = Math.max(1, Math.round(this.loopLength / secondsPerBar));
+    return this.calculateRecordingEndPlan({
+      recordingStartTime: this.lastOverdubStart,
+      stopRequestTime,
+      unitDuration: this.loopLength,
+      mode: RECORD_END_MODES.SMART,
+      unitBars: masterBars,
+    });
+  }
+
+  calculateRecordingEndPlan({ recordingStartTime, stopRequestTime, unitDuration, mode, unitBars }) {
+    const secondsPerBar = this.tempo.getBarDuration();
+    const elapsedRecordingTime = Math.max(0, stopRequestTime - recordingStartTime);
+    const rawBarPosition = elapsedRecordingTime / secondsPerBar;
+    const rawUnitPosition = elapsedRecordingTime / unitDuration;
+    const completedUnits = Math.floor(rawUnitPosition);
+    const unitProgress = rawUnitPosition - completedUnits;
+    let targetUnits = null;
+    if (mode === RECORD_END_MODES.SMART) {
+      // AudioContext時刻の浮動小数点誤差で、ちょうど50%が49.999...%扱いにならないよう微小誤差だけ吸収する。
+      const reachesSmartThreshold = unitProgress >= this.smartEndThreshold - 1e-9;
+      targetUnits = Math.max(1, completedUnits + (reachesSmartThreshold ? 1 : 0));
+    } else if (mode === RECORD_END_MODES.NEXT_BAR) {
+      targetUnits = Math.max(1, completedUnits + 1);
+    }
+    const calculatedTargetBars = targetUnits === null ? rawBarPosition : targetUnits * unitBars;
+    const calculatedLoopLength = targetUnits === null ? elapsedRecordingTime : targetUnits * unitDuration;
+    const targetStopTime = recordingStartTime + calculatedLoopLength;
+    const shouldContinueRecording = mode !== RECORD_END_MODES.FREE
+      && targetStopTime > stopRequestTime + 1 / this.context.sampleRate;
+    return {
+      mode,
+      recordingStartTime,
+      stopRequestTime,
+      elapsedRecordingTime,
+      secondsPerBar,
+      rawBarPosition,
+      completedBars: Math.floor(rawBarPosition),
+      barProgress: rawBarPosition - Math.floor(rawBarPosition),
+      smartEndThreshold: this.smartEndThreshold,
+      calculatedTargetBars,
+      calculatedLoopLength,
+      targetStopTime,
+      captureStopTime: shouldContinueRecording ? targetStopTime : stopRequestTime,
+      shouldContinueRecording,
+      actualRecordedBufferLength: null,
+      finalTrimmedBufferLength: null,
+    };
+  }
+
+  trimCaptureToPlan(samples, plan) {
+    if (plan.mode === RECORD_END_MODES.FREE) return samples;
+    const targetLength = Math.max(1, Math.round(plan.calculatedLoopLength * this.context.sampleRate));
+    const result = new Float32Array(targetLength);
+    result.set(samples.subarray(0, targetLength));
+    return result;
+  }
+
+  createEmptyRecordingEndDebug() {
+    return {
+      mode: this.recordEndMode,
+      recordingStartTime: null,
+      stopRequestTime: null,
+      elapsedRecordingTime: null,
+      secondsPerBar: null,
+      rawBarPosition: null,
+      completedBars: null,
+      barProgress: null,
+      smartEndThreshold: this.smartEndThreshold,
+      calculatedTargetBars: null,
+      calculatedLoopLength: null,
+      actualRecordedBufferLength: null,
+      finalTrimmedBufferLength: null,
+    };
+  }
+
   scheduleActionAt(audioTime, callback) {
     const delay = Math.max(0, (audioTime - this.context.currentTime) * 1000);
     const timer = window.setTimeout(() => {
@@ -580,4 +708,9 @@ export class LooperEngine extends EventTarget {
     this.stream?.getTracks().forEach((track) => track.stop());
     this.context?.close();
   }
+}
+
+function formatBars(value) {
+  if (!Number.isFinite(value)) return 'N/A';
+  return Number.isInteger(value) ? String(value) : value.toFixed(2);
 }
