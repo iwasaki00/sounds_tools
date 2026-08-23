@@ -1,0 +1,1670 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#060811">
+  <link rel="icon" href="data:,">
+  <title>WAVシーケンサ</title>
+  <style>
+    :root {
+      --bg: #060811;
+      --surface: rgba(11, 16, 31, 0.82);
+      --surface-soft: rgba(35, 43, 68, 0.82);
+      --text: #f5f8ff;
+      --muted: #aeb9d6;
+      --border: rgba(116, 234, 255, 0.34);
+      --active: #46f3d1;
+      --active-text: #031916;
+      --accent: #ff4ed7;
+      --accent-text: #fff7fd;
+      --danger: #ff7b9c;
+      --glow: rgba(70, 243, 209, 0.38);
+      --theme-image: url("assets/theme/neo-grid.png");
+      --step-radius: 7px;
+      color-scheme: dark;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    [data-theme="neo-grid"],
+    [data-theme="studio"] {
+      --bg: #060811;
+      --surface: rgba(11, 16, 31, 0.82);
+      --surface-soft: rgba(35, 43, 68, 0.82);
+      --text: #f5f8ff;
+      --muted: #aeb9d6;
+      --border: rgba(116, 234, 255, 0.34);
+      --active: #46f3d1;
+      --active-text: #031916;
+      --accent: #ff4ed7;
+      --accent-text: #fff7fd;
+      --danger: #ff7b9c;
+      --glow: rgba(70, 243, 209, 0.38);
+      --theme-image: url("assets/theme/neo-grid.png");
+      --step-radius: 7px;
+      color-scheme: dark;
+    }
+
+    [data-theme="cyber-console"],
+    [data-theme="night"] {
+      --bg: #070b11;
+      --surface: rgba(17, 23, 31, 0.88);
+      --surface-soft: rgba(35, 43, 52, 0.9);
+      --text: #eef5ff;
+      --muted: #aab6c5;
+      --border: rgba(80, 142, 230, 0.36);
+      --active: #ff9b35;
+      --active-text: #1b0c02;
+      --accent: #2f8cff;
+      --accent-text: #ffffff;
+      --danger: #ff5959;
+      --glow: rgba(47, 140, 255, 0.34);
+      --theme-image: url("assets/theme/cyber-console.png");
+      --step-radius: 5px;
+      color-scheme: dark;
+    }
+
+    [data-theme="minimal-pro"],
+    [data-theme="mono"] {
+      --bg: #171a19;
+      --surface: rgba(31, 34, 33, 0.88);
+      --surface-soft: rgba(48, 52, 50, 0.86);
+      --text: #f2f1ec;
+      --muted: #b8bbb4;
+      --border: rgba(142, 157, 151, 0.36);
+      --active: #83d8ca;
+      --active-text: #061413;
+      --accent: #b6a06e;
+      --accent-text: #13110a;
+      --danger: #d98686;
+      --glow: rgba(131, 216, 202, 0.22);
+      --theme-image: url("assets/theme/minimal-pro.png");
+      --step-radius: 4px;
+      color-scheme: dark;
+    }
+
+    [data-theme="retro-arcade"] {
+      --bg: #100c0c;
+      --surface: rgba(25, 14, 15, 0.9);
+      --surface-soft: rgba(72, 23, 27, 0.84);
+      --text: #fff1cf;
+      --muted: #d9b984;
+      --border: rgba(244, 219, 174, 0.42);
+      --active: #f2dfb4;
+      --active-text: #3e1014;
+      --accent: #b52c32;
+      --accent-text: #fff3d8;
+      --danger: #ffad48;
+      --glow: rgba(181, 44, 50, 0.42);
+      --theme-image: url("assets/theme/retro-arcade.png");
+      --step-radius: 2px;
+      color-scheme: dark;
+      font-family: "Courier New", ui-monospace, monospace;
+    }
+
+    [data-theme="glass-synth"] {
+      --bg: #07101e;
+      --surface: rgba(15, 28, 49, 0.56);
+      --surface-soft: rgba(33, 56, 86, 0.48);
+      --text: #f4fbff;
+      --muted: #bdd6ee;
+      --border: rgba(179, 232, 255, 0.36);
+      --active: #a7f5ff;
+      --active-text: #021318;
+      --accent: #b08cff;
+      --accent-text: #100520;
+      --danger: #ff9db9;
+      --glow: rgba(167, 245, 255, 0.32);
+      --theme-image: url("assets/theme/glass-synth.png");
+      --step-radius: 10px;
+      color-scheme: dark;
+    }
+
+    [data-theme="modular-rack"] {
+      --bg: #050b08;
+      --surface: rgba(13, 18, 14, 0.9);
+      --surface-soft: rgba(29, 37, 30, 0.86);
+      --text: #f1eadc;
+      --muted: #b9ad97;
+      --border: rgba(199, 151, 77, 0.34);
+      --active: #e89b38;
+      --active-text: #160b01;
+      --accent: #6ea373;
+      --accent-text: #06120a;
+      --danger: #c66955;
+      --glow: rgba(232, 155, 56, 0.32);
+      --theme-image: url("assets/theme/modular-rack.png");
+      --step-radius: 999px;
+      color-scheme: dark;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      overscroll-behavior: none;
+      touch-action: manipulation;
+      -webkit-text-size-adjust: 100%;
+      text-size-adjust: 100%;
+      background: var(--bg);
+    }
+
+    body {
+      min-width: 320px;
+    }
+
+    button,
+    select,
+    input {
+      font: inherit;
+    }
+
+    button,
+    select {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+      color: var(--text);
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .app,
+    .lanes,
+    .steps,
+    .bank-tabs,
+    input[type="range"] {
+      touch-action: manipulation;
+    }
+
+    button {
+      cursor: pointer;
+      font-weight: 700;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+
+    button:active {
+      transform: translateY(1px);
+    }
+
+    button:focus-visible,
+    select:focus-visible,
+    input:focus-visible {
+      outline: 3px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    select {
+      font-size: 16px;
+    }
+
+    .app {
+      position: relative;
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      gap: 8px;
+      width: 100%;
+      height: 100vh;
+      height: -webkit-fill-available;
+      height: 100dvh;
+      padding: 8px;
+      padding:
+        max(8px, env(safe-area-inset-top))
+        max(8px, env(safe-area-inset-right))
+        max(8px, env(safe-area-inset-bottom))
+        max(8px, env(safe-area-inset-left));
+      overflow: hidden;
+    }
+
+    .app::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+      background:
+        linear-gradient(180deg, rgba(0, 0, 0, 0.22), rgba(0, 0, 0, 0.5)),
+        var(--theme-image) center / cover no-repeat;
+      opacity: 0.9;
+      pointer-events: none;
+    }
+
+    .app > * {
+      position: relative;
+      z-index: 1;
+    }
+
+    .topbar {
+      display: grid;
+      grid-template-columns: minmax(112px, auto) 44px repeat(4, minmax(64px, auto)) minmax(180px, 1fr) minmax(130px, 160px);
+      gap: 6px;
+      align-items: center;
+      min-height: 42px;
+      min-width: 0;
+    }
+
+    .title {
+      min-width: 0;
+      font-weight: 850;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .main-button {
+      min-width: 44px;
+      min-height: 38px;
+      padding: 0 10px;
+      background: var(--accent);
+      color: var(--accent-text);
+      border-color: transparent;
+      font-size: 18px;
+      box-shadow: 0 0 22px var(--glow);
+    }
+
+    .tool-button {
+      min-height: 38px;
+      padding: 0 8px;
+      white-space: nowrap;
+    }
+
+    .tempo {
+      display: grid;
+      grid-template-columns: minmax(62px, auto) minmax(0, 1fr);
+      gap: 4px 6px;
+      align-items: center;
+      min-width: 0;
+      padding-inline: 3px;
+    }
+
+    .tempo strong {
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+
+    input[type="range"] {
+      display: block;
+      min-width: 0;
+      width: 100%;
+      height: 28px;
+      margin: 0;
+      accent-color: var(--accent);
+    }
+
+    .theme-select {
+      min-height: 38px;
+      width: 100%;
+      padding: 0 8px;
+    }
+
+    .bankbar {
+      display: grid;
+      grid-template-columns: minmax(150px, 210px) minmax(0, 1fr) auto;
+      gap: 6px;
+      align-items: center;
+      min-width: 0;
+      min-height: 34px;
+      padding: 4px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+      backdrop-filter: blur(12px);
+    }
+
+    .genre-select {
+      width: 100%;
+      min-width: 0;
+      min-height: 30px;
+      padding-inline: 7px;
+    }
+
+    .bank-tabs {
+      display: grid;
+      grid-auto-flow: column;
+      grid-auto-columns: minmax(58px, 1fr);
+      gap: 4px;
+      min-width: 0;
+    }
+
+    .bank-tab {
+      min-width: 0;
+      min-height: 30px;
+      padding-inline: 8px;
+      color: var(--muted);
+      font-size: 11px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .bank-tab.active {
+      color: var(--active-text);
+      background: var(--active);
+      border-color: transparent;
+      box-shadow: 0 0 16px var(--glow);
+    }
+
+    .genre-meta {
+      min-width: 84px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    .lanes {
+      display: grid;
+      grid-template-rows: repeat(var(--lane-count, 6), minmax(0, 1fr));
+      gap: 6px;
+      min-height: 0;
+      overflow: auto;
+      overscroll-behavior: contain;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .lanes.sparse {
+      grid-template-rows: repeat(var(--lane-count, 1), minmax(76px, 112px));
+      align-content: start;
+    }
+
+    .lane {
+      display: grid;
+      grid-template-columns: 340px minmax(0, 1fr);
+      gap: 8px;
+      min-height: 0;
+      padding: 7px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+      backdrop-filter: blur(12px);
+      box-shadow: 0 8px 28px rgba(0, 0, 0, 0.22);
+    }
+
+    .lane-head {
+      display: grid;
+      grid-template-columns: minmax(94px, 1.2fr) minmax(78px, 1fr) 74px 60px;
+      grid-template-rows: minmax(28px, 1fr) minmax(24px, 0.8fr);
+      grid-template-areas:
+        "title sound random clear"
+        "volume volume volume volume";
+      gap: 5px;
+      min-width: 0;
+      align-items: stretch;
+    }
+
+    .lane-title {
+      grid-area: title;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      min-width: 0;
+    }
+
+    .lane-icon {
+      display: grid;
+      flex: 0 0 25px;
+      width: 25px;
+      height: 25px;
+      place-items: center;
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      background: var(--surface-soft);
+      color: var(--accent);
+    }
+
+    .lane-icon svg {
+      width: 19px;
+      height: 19px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 1.9;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .lane-name {
+      align-self: center;
+      min-width: 0;
+      font-weight: 850;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .lane-action {
+      min-width: 0;
+      min-height: 31px;
+      padding: 0 5px;
+      font-size: 12px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .lane-random {
+      grid-area: random;
+    }
+
+    .lane-action.clear {
+      grid-area: clear;
+      color: var(--danger);
+    }
+
+    .sound-select {
+      grid-area: sound;
+      min-height: 31px;
+      min-width: 0;
+      padding: 0 6px;
+    }
+
+    .volume-control {
+      grid-area: volume;
+      display: grid;
+      grid-template-columns: 30px minmax(0, 1fr) 38px;
+      gap: 6px;
+      align-items: center;
+      min-width: 0;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .volume-control input[type="range"] {
+      height: 22px;
+    }
+
+    .volume-value {
+      color: var(--text);
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(16, minmax(0, 1fr));
+      gap: 4px;
+      min-width: 0;
+      min-height: 0;
+    }
+
+    .step {
+      position: relative;
+      min-width: 0;
+      min-height: 0;
+      padding: 0;
+      border-radius: var(--step-radius);
+      background: var(--surface-soft);
+      color: var(--muted);
+    }
+
+    .step:nth-child(4n + 1) {
+      border-color: var(--accent);
+    }
+
+    .step.on {
+      background: var(--active);
+      color: var(--active-text);
+      border-color: transparent;
+      box-shadow: 0 0 18px var(--glow);
+    }
+
+    .step.playing {
+      outline: 3px solid var(--accent);
+      outline-offset: -3px;
+    }
+
+    .step::after {
+      content: attr(data-index);
+      position: absolute;
+      right: 4px;
+      bottom: 2px;
+      font-size: 10px;
+      font-weight: 800;
+      opacity: 0.75;
+    }
+
+    .status {
+      min-height: 18px;
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    [data-theme="retro-arcade"] .lane,
+    [data-theme="retro-arcade"] .bankbar,
+    [data-theme="retro-arcade"] button,
+    [data-theme="retro-arcade"] select {
+      border-radius: 2px;
+    }
+
+    [data-theme="retro-arcade"] .lane {
+      backdrop-filter: none;
+      box-shadow: 3px 3px 0 rgba(78, 13, 17, 0.72);
+    }
+
+    @media (max-width: 920px) {
+      .topbar {
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+      }
+
+      .title {
+        grid-column: 1 / 3;
+        grid-row: 1;
+      }
+
+      .main-button {
+        grid-column: 3;
+        grid-row: 1;
+      }
+
+      #randomAll {
+        grid-column: 4;
+        grid-row: 1;
+      }
+
+      #savePattern {
+        grid-column: 5;
+        grid-row: 1;
+      }
+
+      #loadPattern {
+        grid-column: 6;
+        grid-row: 1;
+      }
+
+      #clearAll {
+        grid-column: 1;
+        grid-row: 2;
+      }
+
+      .tempo {
+        grid-column: 2 / 5;
+        grid-row: 2;
+      }
+
+      .theme-select {
+        grid-column: 5 / 7;
+        grid-row: 2;
+      }
+
+      .bankbar {
+        grid-template-columns: minmax(130px, 180px) minmax(0, 1fr) auto;
+      }
+
+      .tool-button {
+        min-height: 34px;
+      }
+
+      .lane {
+        grid-template-columns: 300px minmax(0, 1fr);
+        gap: 5px;
+        padding: 5px;
+      }
+
+      .lane-head {
+        grid-template-columns: minmax(78px, 1fr) minmax(66px, 0.9fr) 70px 56px;
+      }
+
+      .lane-action {
+        font-size: 11px;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .app {
+        gap: 6px;
+        padding-inline:
+          max(6px, env(safe-area-inset-left))
+          max(6px, env(safe-area-inset-right));
+      }
+
+      .topbar {
+        grid-template-columns: repeat(3, 1fr);
+      }
+
+      .title {
+        grid-column: 1 / 3;
+        grid-row: 1;
+      }
+
+      .main-button {
+        grid-column: 3;
+        grid-row: 1;
+      }
+
+      #randomAll {
+        grid-column: 1;
+        grid-row: 2;
+      }
+
+      #savePattern {
+        grid-column: 2;
+        grid-row: 2;
+      }
+
+      #loadPattern {
+        grid-column: 3;
+        grid-row: 2;
+      }
+
+      #clearAll {
+        grid-column: 1;
+        grid-row: 3;
+      }
+
+      .theme-select {
+        grid-column: 2 / 4;
+        grid-row: 3;
+      }
+
+      .tempo {
+        grid-column: 1 / -1;
+        grid-row: 4;
+      }
+
+      .bankbar {
+        grid-template-columns: minmax(98px, 128px) minmax(0, 1fr);
+        gap: 4px;
+        padding: 3px;
+      }
+
+      .genre-meta {
+        display: none;
+      }
+
+      .bank-tabs {
+        grid-auto-columns: minmax(0, 1fr);
+        gap: 3px;
+      }
+
+      .genre-select,
+      .bank-tab {
+        min-height: 28px;
+      }
+
+      .bank-tab {
+        padding-inline: 3px;
+        font-size: 9px;
+      }
+
+      .main-button,
+      .tool-button,
+      .theme-select {
+        width: 100%;
+        min-height: 34px;
+      }
+
+      .tempo {
+        grid-template-columns: 54px 1fr;
+      }
+
+      .lane {
+        grid-template-columns: 1fr;
+        gap: 4px;
+      }
+
+      .lane-head {
+        grid-template-columns: minmax(70px, 0.9fr) minmax(72px, 1.15fr) 74px 60px;
+        grid-template-rows: 30px 25px;
+        grid-template-areas:
+          "title sound random clear"
+          "volume volume volume volume";
+        gap: 3px;
+      }
+
+      .lane-title {
+        gap: 5px;
+      }
+
+      .lane-icon {
+        flex-basis: 22px;
+        width: 22px;
+        height: 22px;
+      }
+
+      .lane-icon svg {
+        width: 16px;
+        height: 16px;
+      }
+
+      .lane-name {
+        font-size: 13px;
+      }
+
+      .sound-select {
+        min-height: 30px;
+        padding-inline: 4px;
+        font-size: 12px;
+      }
+
+      .lane-action {
+        min-height: 30px;
+        font-size: 11px;
+      }
+
+      .volume-control {
+        grid-template-columns: 27px minmax(0, 1fr) 35px;
+        gap: 4px;
+      }
+
+      .step::after {
+        display: none;
+      }
+    }
+
+    @media (max-height: 560px) {
+      .app {
+        gap: 5px;
+        padding-block:
+          max(5px, env(safe-area-inset-top))
+          max(5px, env(safe-area-inset-bottom));
+      }
+
+      .topbar {
+        min-height: 34px;
+      }
+
+      .main-button,
+      .tool-button,
+      .theme-select {
+        min-height: 31px;
+      }
+
+      .lane {
+        padding: 4px;
+      }
+
+      .lane-head {
+        gap: 3px;
+      }
+
+      .sound-select {
+        min-height: 28px;
+      }
+
+      .lane-head {
+        grid-template-rows: minmax(25px, 1fr) minmax(20px, 0.7fr);
+      }
+
+      .volume-control input[type="range"] {
+        height: 18px;
+      }
+
+      .status {
+        min-height: 14px;
+      }
+
+      .bankbar {
+        min-height: 28px;
+        padding-block: 2px;
+      }
+
+      .genre-select,
+      .bank-tab {
+        min-height: 24px;
+        height: 24px;
+      }
+    }
+
+    @media (max-height: 560px) and (min-width: 641px) {
+      .lanes {
+        gap: 3px;
+      }
+
+      .lane {
+        grid-template-columns: 390px minmax(0, 1fr);
+        gap: 4px;
+        padding: 2px;
+      }
+
+      .lane-head {
+        grid-template-columns: 76px 76px 64px 54px minmax(100px, 1fr);
+        grid-template-rows: minmax(0, 1fr);
+        grid-template-areas: "title sound random clear volume";
+        gap: 3px;
+      }
+
+      .lane-action,
+      .sound-select {
+        min-height: 28px;
+        font-size: 10px;
+      }
+
+      .lane-icon {
+        flex-basis: 22px;
+        width: 22px;
+        height: 22px;
+      }
+
+      .lane-icon svg {
+        width: 16px;
+        height: 16px;
+      }
+
+      .lane-name {
+        font-size: 12px;
+      }
+
+      .volume-control {
+        grid-template-columns: 24px minmax(0, 1fr) 31px;
+        gap: 3px;
+        font-size: 10px;
+      }
+
+      .steps {
+        gap: 2px;
+      }
+
+      .step::after {
+        display: none;
+      }
+    }
+
+    @media (max-width: 640px) and (max-height: 620px) {
+      .app {
+        gap: 3px;
+        padding-block:
+          max(4px, env(safe-area-inset-top))
+          max(4px, env(safe-area-inset-bottom));
+      }
+
+      .topbar {
+        gap: 3px;
+      }
+
+      .title {
+        grid-column: 1;
+        grid-row: 1;
+        font-size: 13px;
+      }
+
+      .main-button {
+        grid-column: 2;
+        grid-row: 1;
+      }
+
+      #randomAll {
+        grid-column: 3;
+        grid-row: 1;
+      }
+
+      #savePattern {
+        grid-column: 1;
+        grid-row: 2;
+      }
+
+      #loadPattern {
+        grid-column: 2;
+        grid-row: 2;
+      }
+
+      #clearAll {
+        grid-column: 3;
+        grid-row: 2;
+      }
+
+      .tempo {
+        grid-column: 1 / 3;
+        grid-row: 3;
+      }
+
+      .theme-select {
+        grid-column: 3;
+        grid-row: 3;
+      }
+
+      .main-button,
+      .tool-button,
+      .theme-select {
+        min-height: 27px;
+        height: 27px;
+        font-size: 11px;
+      }
+
+      .main-button {
+        font-size: 15px;
+      }
+
+      .tempo {
+        grid-template-columns: 57px minmax(0, 1fr);
+        font-size: 11px;
+      }
+
+      .tempo input[type="range"] {
+        height: 22px;
+      }
+
+      .lanes {
+        gap: 2px;
+      }
+
+      .lane {
+        gap: 2px;
+        padding: 2px;
+      }
+
+      .lane-head {
+        grid-template-rows: 22px 16px;
+        gap: 1px 3px;
+      }
+
+      .lane-action,
+      .sound-select {
+        min-height: 22px;
+        height: 22px;
+        font-size: 10px;
+      }
+
+      .lane-icon {
+        flex-basis: 19px;
+        width: 19px;
+        height: 19px;
+      }
+
+      .lane-icon svg {
+        width: 14px;
+        height: 14px;
+      }
+
+      .lane-name {
+        font-size: 11px;
+      }
+
+      .volume-control {
+        font-size: 9px;
+      }
+
+      .volume-control input[type="range"] {
+        height: 14px;
+      }
+
+      .steps {
+        gap: 2px;
+      }
+
+      .step::after {
+        display: none;
+      }
+
+      .status {
+        min-height: 12px;
+        font-size: 10px;
+      }
+
+      .bankbar {
+        min-height: 25px;
+        padding: 1px 2px;
+      }
+
+      .genre-select,
+      .bank-tab {
+        min-height: 23px;
+        height: 23px;
+        font-size: 9px;
+      }
+    }
+
+    /*
+      iPhone portrait: keep the controls fixed and let the track list scroll.
+      Eight steps per row keeps the cells large enough to tap without zooming.
+    */
+    @media (orientation: portrait) and (max-width: 640px) {
+      .app {
+        grid-template-rows: auto auto minmax(0, 1fr) auto;
+      }
+
+      .main-button,
+      .tool-button,
+      .theme-select {
+        min-height: 44px;
+        height: 44px;
+      }
+
+      .genre-select,
+      .bank-tab {
+        min-height: 44px;
+        height: 44px;
+      }
+
+      .bank-tabs {
+        grid-auto-columns: minmax(44px, 1fr);
+        overflow-x: auto;
+        overflow-y: hidden;
+        -webkit-overflow-scrolling: touch;
+      }
+
+      .theme-select,
+      .genre-select,
+      .sound-select {
+        font-size: 16px;
+      }
+
+      .lanes,
+      .lanes.sparse {
+        grid-template-rows: none;
+        grid-auto-rows: minmax(188px, auto);
+        align-content: start;
+        gap: 6px;
+        overflow-x: hidden;
+        overflow-y: auto;
+      }
+
+      .lane {
+        grid-template-columns: minmax(0, 1fr);
+        min-height: 188px;
+        overflow-x: hidden;
+        scroll-snap-align: start;
+      }
+
+      .lane-head {
+        grid-template-rows: 44px 44px;
+      }
+
+      .lane-action,
+      .sound-select {
+        min-height: 44px;
+        height: 44px;
+      }
+
+      .tempo input[type="range"],
+      .volume-control input[type="range"] {
+        min-height: 44px;
+        height: 44px;
+      }
+
+      .steps {
+        grid-template-columns: repeat(8, minmax(44px, 1fr));
+        grid-template-rows: repeat(2, 44px);
+        width: 100%;
+        min-width: 0;
+        min-height: 92px;
+        gap: 4px;
+        overflow-x: auto;
+        overflow-y: hidden;
+        overscroll-behavior-inline: contain;
+        -webkit-overflow-scrolling: touch;
+        scroll-snap-type: x proximity;
+      }
+
+      .step {
+        min-width: 44px;
+        min-height: 44px;
+        scroll-snap-align: start;
+      }
+    }
+
+    /*
+      iPhone landscape: use a compact single-row mixer header and a shared
+      horizontal/vertical track viewport. Track headers stay visible while
+      the 16-step area pans horizontally.
+    */
+    @media (orientation: landscape) and (max-height: 560px) {
+      .app {
+        grid-template-rows: auto auto minmax(0, 1fr) auto;
+        gap: 4px;
+        padding: 4px 6px;
+        padding:
+          max(4px, env(safe-area-inset-top))
+          max(6px, env(safe-area-inset-right))
+          max(4px, env(safe-area-inset-bottom))
+          max(6px, env(safe-area-inset-left));
+      }
+
+      .topbar {
+        grid-template-columns:
+          minmax(56px, 0.7fr)
+          44px
+          repeat(4, minmax(46px, 0.55fr))
+          minmax(118px, 1.2fr)
+          minmax(88px, 0.85fr);
+        grid-template-rows: 44px;
+        gap: 3px;
+        min-height: 44px;
+      }
+
+      .title,
+      .main-button,
+      #randomAll,
+      #savePattern,
+      #loadPattern,
+      #clearAll,
+      .tempo,
+      .theme-select {
+        grid-column: auto;
+        grid-row: auto;
+      }
+
+      .title {
+        font-size: 11px;
+      }
+
+      .main-button,
+      .tool-button,
+      .theme-select {
+        width: 100%;
+        min-width: 0;
+        min-height: 44px;
+        height: 44px;
+        padding-inline: 3px;
+        overflow: hidden;
+        font-size: 11px;
+        text-overflow: ellipsis;
+      }
+
+      #randomAll,
+      #savePattern,
+      #loadPattern,
+      #clearAll {
+        font-size: 0;
+      }
+
+      #randomAll::after,
+      #savePattern::after,
+      #loadPattern::after,
+      #clearAll::after {
+        font-size: 11px;
+      }
+
+      #randomAll::after {
+        content: "全乱";
+      }
+
+      #savePattern::after {
+        content: "保存";
+      }
+
+      #loadPattern::after {
+        content: "読込";
+      }
+
+      #clearAll::after {
+        content: "全消";
+      }
+
+      .tempo {
+        grid-template-columns: 52px minmax(0, 1fr);
+        gap: 3px;
+        padding-inline: 2px;
+        font-size: 10px;
+      }
+
+      .tempo input[type="range"] {
+        min-height: 44px;
+        height: 44px;
+      }
+
+      .theme-select,
+      .genre-select,
+      .sound-select {
+        font-size: 16px;
+      }
+
+      .bankbar {
+        grid-template-columns: minmax(118px, 160px) minmax(0, 1fr);
+        min-height: 44px;
+        padding: 2px;
+      }
+
+      .genre-meta {
+        display: none;
+      }
+
+      .genre-select,
+      .bank-tab {
+        min-height: 44px;
+        height: 44px;
+      }
+
+      .lanes,
+      .lanes.sparse {
+        grid-template-rows: repeat(var(--lane-count, 6), minmax(50px, 1fr));
+        align-content: start;
+        gap: 3px;
+        overflow: auto;
+        scroll-snap-type: y proximity;
+      }
+
+      .lane {
+        position: relative;
+        grid-template-columns: 360px minmax(749px, 1fr);
+        gap: 4px;
+        min-width: 1113px;
+        min-height: 50px;
+        padding: 3px;
+        scroll-snap-align: start;
+      }
+
+      .lane-head {
+        position: sticky;
+        left: 0;
+        z-index: 2;
+        grid-template-columns: 76px 86px 62px 50px minmax(70px, 1fr);
+        grid-template-rows: minmax(44px, 1fr);
+        grid-template-areas: "title sound random clear volume";
+        gap: 3px;
+        min-width: 0;
+        padding-right: 3px;
+        background: var(--surface);
+      }
+
+      .lane-icon {
+        flex-basis: 20px;
+        width: 20px;
+        height: 20px;
+      }
+
+      .lane-icon svg {
+        width: 14px;
+        height: 14px;
+      }
+
+      .lane-name,
+      .lane-action {
+        font-size: 10px;
+      }
+
+      .lane-action,
+      .sound-select {
+        min-height: 44px;
+        height: 44px;
+      }
+
+      .volume-control {
+        grid-template-columns: 24px minmax(0, 1fr) 30px;
+        gap: 3px;
+        font-size: 9px;
+      }
+
+      .volume-control input[type="range"] {
+        min-height: 44px;
+        height: 44px;
+      }
+
+      .steps {
+        grid-template-columns: repeat(16, minmax(44px, 1fr));
+        gap: 3px;
+        min-width: 749px;
+        min-height: 44px;
+      }
+
+      .step {
+        min-width: 44px;
+        min-height: 44px;
+      }
+
+      .status {
+        min-height: 13px;
+        font-size: 10px;
+      }
+    }
+
+    /* Compact transport and settings panel. */
+    .topbar {
+      grid-template-columns:
+        44px
+        minmax(88px, 120px)
+        minmax(72px, 100px)
+        minmax(64px, 90px)
+        minmax(180px, 1fr);
+      grid-template-rows: 44px;
+      grid-template-areas: "play random clear settings tempo";
+      gap: 6px;
+      min-height: 44px;
+    }
+
+    .topbar > * {
+      min-width: 0;
+    }
+
+    .topbar .main-button,
+    .topbar .tool-button {
+      width: 100%;
+      min-height: 44px;
+      height: 44px;
+    }
+
+    #play {
+      grid-area: play;
+    }
+
+    #randomAll {
+      grid-area: random;
+    }
+
+    #clearAll {
+      grid-area: clear;
+    }
+
+    #openSettings {
+      grid-area: settings;
+    }
+
+    .topbar .tempo {
+      grid-column: auto;
+      grid-row: auto;
+      grid-area: tempo;
+    }
+
+    .topbar #randomAll,
+    .topbar #clearAll {
+      font-size: 13px;
+    }
+
+    .topbar #randomAll::after,
+    .topbar #clearAll::after {
+      content: none;
+    }
+
+    .settings-dialog {
+      position: fixed;
+      inset: 0;
+      z-index: 20;
+      width: min(
+        420px,
+        calc(
+          100vw - 24px - env(safe-area-inset-left) -
+            env(safe-area-inset-right)
+        )
+      );
+      max-width: none;
+      max-height: min(
+        560px,
+        calc(
+          100vh - 24px - env(safe-area-inset-top) -
+            env(safe-area-inset-bottom)
+        )
+      );
+      max-height: min(
+        560px,
+        calc(
+          100dvh - 24px - env(safe-area-inset-top) -
+            env(safe-area-inset-bottom)
+        )
+      );
+      margin: auto;
+      padding: 0;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: var(--surface);
+      color: var(--text);
+      box-shadow: 0 24px 80px rgba(0, 0, 0, 0.58);
+      backdrop-filter: blur(18px);
+    }
+
+    .settings-dialog[open] {
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+    }
+
+    .settings-dialog::backdrop {
+      background: rgba(0, 0, 0, 0.66);
+      backdrop-filter: blur(4px);
+    }
+
+    .settings-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      min-height: 56px;
+      padding: 6px 8px 6px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .settings-header h2 {
+      margin: 0;
+      font-size: 18px;
+    }
+
+    .settings-close {
+      width: 44px;
+      min-width: 44px;
+      height: 44px;
+      padding: 0;
+      font-size: 24px;
+      line-height: 1;
+    }
+
+    .settings-content {
+      display: grid;
+      gap: 14px;
+      padding: 16px;
+      overflow: auto;
+      overscroll-behavior: contain;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .settings-field {
+      display: grid;
+      gap: 7px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .settings-dialog .theme-select {
+      grid-column: auto;
+      grid-row: auto;
+      width: 100%;
+      min-height: 44px;
+      height: 44px;
+      font-size: 16px;
+    }
+
+    .settings-actions {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .settings-dialog #savePattern,
+    .settings-dialog #loadPattern {
+      grid-column: auto;
+      grid-row: auto;
+      width: 100%;
+      min-height: 44px;
+      height: 44px;
+      padding-inline: 10px;
+      font-size: 14px;
+    }
+
+    .settings-dialog #savePattern::after,
+    .settings-dialog #loadPattern::after {
+      content: none;
+    }
+
+    .settings-note {
+      margin: 0;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    /* iPhone portrait: all 16 steps stay in one horizontal row. */
+    @media (orientation: portrait) and (max-width: 640px) {
+      .topbar {
+        grid-template-columns: 44px repeat(3, minmax(0, 1fr));
+        grid-template-rows: 44px 44px;
+        grid-template-areas:
+          "play random clear settings"
+          "tempo tempo tempo tempo";
+        gap: 4px;
+      }
+
+      .topbar .tool-button {
+        padding-inline: 3px;
+        font-size: 12px;
+      }
+
+      .topbar .tempo {
+        grid-template-columns: 58px minmax(0, 1fr);
+        min-height: 44px;
+      }
+
+      .lanes,
+      .lanes.sparse {
+        grid-template-rows: none;
+        grid-auto-rows: minmax(148px, auto);
+      }
+
+      .lane {
+        min-height: 148px;
+      }
+
+      .steps {
+        grid-template-columns: repeat(16, minmax(0, 1fr));
+        grid-template-rows: 44px;
+        width: 100%;
+        min-width: 0;
+        min-height: 44px;
+        gap: 2px;
+        overflow: hidden;
+        scroll-snap-type: none;
+      }
+
+      .step {
+        min-width: 0;
+        min-height: 44px;
+        scroll-snap-align: none;
+      }
+    }
+
+    /* iPhone landscape: mixer and all 16 steps share the visible width. */
+    @media (orientation: landscape) and (max-height: 560px) {
+      .topbar {
+        grid-template-columns:
+          44px
+          minmax(72px, 100px)
+          minmax(64px, 90px)
+          minmax(56px, 76px)
+          minmax(150px, 1fr);
+        grid-template-rows: 44px;
+        grid-template-areas: "play random clear settings tempo";
+        gap: 3px;
+      }
+
+      .topbar .main-button,
+      .topbar .tool-button {
+        min-width: 0;
+        min-height: 44px;
+        height: 44px;
+      }
+
+      .topbar .tool-button {
+        padding-inline: 3px;
+        font-size: 11px;
+      }
+
+      .topbar .tempo {
+        grid-template-columns: 52px minmax(0, 1fr);
+        min-height: 44px;
+      }
+
+      .lanes,
+      .lanes.sparse {
+        grid-template-rows: none;
+        grid-auto-rows: minmax(98px, auto);
+        overflow-x: hidden;
+        overflow-y: auto;
+      }
+
+      .lane {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: 44px 44px;
+        width: 100%;
+        min-width: 0;
+        min-height: 98px;
+      }
+
+      .lane-head {
+        position: static;
+        grid-template-columns:
+          minmax(68px, 0.8fr)
+          minmax(104px, 1fr)
+          52px
+          52px
+          minmax(132px, 1.25fr);
+        grid-template-rows: minmax(44px, 1fr);
+        grid-template-areas: "title sound random clear volume";
+        padding-right: 0;
+      }
+
+      .steps {
+        grid-template-columns: repeat(16, minmax(0, 1fr));
+        width: 100%;
+        min-width: 0;
+        min-height: 44px;
+        gap: 2px;
+        overflow: hidden;
+      }
+
+      .step {
+        min-width: 0;
+        min-height: 44px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="app" id="app" data-theme="neo-grid">
+    <section class="topbar" aria-label="操作">
+      <button class="main-button" id="play" type="button" aria-label="再生">▶</button>
+      <button class="tool-button" id="randomAll" type="button">ランダム</button>
+      <button class="tool-button" id="clearAll" type="button">クリア</button>
+      <button class="tool-button settings-button" id="openSettings" type="button" aria-haspopup="dialog" aria-controls="settingsDialog">設定</button>
+      <label class="tempo">
+        <strong><span id="bpmValue">120</span>BPM</strong>
+        <input id="bpm" type="range" min="70" max="170" value="120" step="1" aria-label="BPM">
+      </label>
+    </section>
+
+    <section class="bankbar" aria-label="ジャンルと楽器バンク">
+      <select class="genre-select" id="genre" aria-label="音楽ジャンル"></select>
+      <div class="bank-tabs" id="bankTabs" aria-label="楽器バンク"></div>
+      <span class="genre-meta" id="genreMeta"></span>
+    </section>
+
+    <section class="lanes" id="lanes" aria-label="シーケンサー"></section>
+    <div class="status" id="status" aria-live="polite"></div>
+
+    <dialog class="settings-dialog" id="settingsDialog" aria-labelledby="settingsTitle">
+      <header class="settings-header">
+        <h2 id="settingsTitle">設定</h2>
+        <button class="settings-close" id="closeSettings" type="button" aria-label="設定を閉じる">×</button>
+      </header>
+      <div class="settings-content">
+        <label class="settings-field">
+          <span>デザイン変更</span>
+          <select class="theme-select" id="theme" aria-label="デザイン">
+            <option value="neo-grid">Neo Grid</option>
+            <option value="cyber-console">Cyber Console</option>
+            <option value="minimal-pro">Minimal Pro</option>
+            <option value="retro-arcade">Retro Arcade / ファミコン風</option>
+            <option value="glass-synth">Glass Synth</option>
+            <option value="modular-rack">Modular Rack</option>
+          </select>
+        </label>
+        <div class="settings-actions">
+          <button class="tool-button" id="savePattern" type="button">セーブ</button>
+          <button class="tool-button" id="loadPattern" type="button">ロード</button>
+        </div>
+        <p class="settings-note">編集内容は自動保存されます。</p>
+      </div>
+    </dialog>
+  </main>
+
+  <script src="genre-data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

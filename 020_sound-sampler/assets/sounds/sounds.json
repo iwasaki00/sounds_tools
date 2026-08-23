@@ -1,0 +1,274 @@
+[
+  {
+    "id": "default-101",
+    "file": "Xファイルのテーマ.wav",
+    "name": "Xファイルのテーマ",
+    "category": "BGM",
+    "color": "#7c3aed",
+    "loop": false
+  },
+  {
+    "id": "default-102",
+    "file": "コナン_ひらめき.wav",
+    "name": "コナン ひらめき",
+    "category": "ひらめき",
+    "color": "#c77800",
+    "loop": false
+  },
+  {
+    "id": "default-103",
+    "file": "コナン_終盤.wav",
+    "name": "コナン 終盤",
+    "category": "BGM",
+    "color": "#7c3aed",
+    "loop": false
+  },
+  {
+    "id": "default-104",
+    "file": "コナン_推理中.wav",
+    "name": "コナン 推理中",
+    "category": "BGM",
+    "color": "#7c3aed",
+    "loop": false
+  },
+  {
+    "id": "default-105",
+    "file": "チーン.wav",
+    "name": "チーン",
+    "category": "コミカル",
+    "color": "#64748b",
+    "loop": false
+  },
+  {
+    "id": "default-106",
+    "file": "ドッキリ大成功.wav",
+    "name": "ドッキリ大成功",
+    "category": "コミカル",
+    "color": "#ec4899",
+    "loop": false
+  },
+  {
+    "id": "default-107",
+    "file": "ドラえもん_道具古.wav",
+    "name": "ドラえもん 道具（旧）",
+    "category": "ひらめき",
+    "color": "#0ea5e9",
+    "loop": false
+  },
+  {
+    "id": "default-108",
+    "file": "ドラえもん_道具新.wav",
+    "name": "ドラえもん 道具（新）",
+    "category": "ひらめき",
+    "color": "#06b6d4",
+    "loop": false
+  },
+  {
+    "id": "default-109",
+    "file": "パチンコ_キュイン.wav",
+    "name": "パチンコ キュイン",
+    "category": "決め音",
+    "color": "#22c55e",
+    "loop": false
+  },
+  {
+    "id": "default-110",
+    "file": "ワンピース_どん！.wav",
+    "name": "ワンピース どん！",
+    "category": "決め音",
+    "color": "#ef4444",
+    "loop": false
+  },
+  {
+    "id": "default-111",
+    "file": "火曜サスペンス劇場.wav",
+    "name": "火曜サスペンス劇場",
+    "category": "BGM",
+    "color": "#7c3aed",
+    "loop": false
+  },
+  {
+    "id": "default-112",
+    "file": "笑ってはいけない_デデーン.wav",
+    "name": "笑ってはいけない デデーン",
+    "category": "コミカル",
+    "color": "#f97316",
+    "loop": false
+  },
+  {
+    "id": "default-113",
+    "file": "エヴァ_ヤシマ作戦.wav",
+    "name": "エヴァ ヤシマ作戦",
+    "category": "BGM",
+    "color": "#7c3aed",
+    "loop": false
+  },
+  {
+    "id": "default-114",
+    "file": "エヴァ_次回予告.wav",
+    "name": "エヴァ 次回予告",
+    "category": "演出",
+    "color": "#ef4444",
+    "loop": false
+  },
+  {
+    "id": "default-115",
+    "file": "ガンダム_ニュータイプ.wav",
+    "name": "ガンダム ニュータイプ",
+    "category": "演出",
+    "color": "#06b6d4",
+    "loop": false
+  },
+  {
+    "id": "default-116",
+    "file": "ごっつ_やすしくん.wav",
+    "name": "ごっつ やすしくん",
+    "category": "コミカル",
+    "color": "#f97316",
+    "loop": false
+  },
+  {
+    "id": "default-117",
+    "file": "ルパン_タイプライター.wav",
+    "name": "ルパン タイプライター",
+    "category": "演出",
+    "color": "#22c55e",
+    "loop": false
+  },
+  {
+    "id": "default-118",
+    "file": "サイコ_ショッキングシーン.wav",
+    "name": "サイコ ショッキングシーン",
+    "category": "演出",
+    "color": "#ef4444",
+    "loop": false
+  },
+  {
+    "id": "default-119",
+    "file": "ジョジョ_tobeContinued.wav",
+    "name": "ジョジョ To Be Continued",
+    "category": "演出",
+    "color": "#c77800",
+    "loop": false
+  },
+  {
+    "id": "default-120",
+    "file": "世にも奇妙な物語テーマ.wav",
+    "name": "世にも奇妙な物語 テーマ",
+    "category": "BGM",
+    "color": "#7c3aed",
+    "loop": false
+  },
+  {
+    "id": "default-121",
+    "file": "踊る大捜査線テーマ.wav",
+    "name": "踊る大捜査線 テーマ",
+    "category": "BGM",
+    "color": "#0ea5e9",
+    "loop": false
+  },
+  {
+    "id": "default-123",
+    "file": "セクシー_ワーオ.wav",
+    "name": "セクシー ワーオ",
+    "category": "コミカル",
+    "color": "#a855f7",
+    "loop": false
+  },
+  {
+    "id": "default-124",
+    "file": "ちいかわ_なんとかなれ.wav",
+    "name": "ちいかわ なんとかなれ",
+    "category": "コミカル",
+    "color": "#22c55e",
+    "loop": false
+  },
+  {
+    "id": "default-125",
+    "file": "ちいかわ栗まんじゅう.wav",
+    "name": "ちいかわ 栗まんじゅう",
+    "category": "コミカル",
+    "color": "#c77800",
+    "loop": false
+  },
+  {
+    "id": "default-126",
+    "file": "ドリフ_くしゃみ.wav",
+    "name": "ドリフ くしゃみ",
+    "category": "コミカル",
+    "color": "#06b6d4",
+    "loop": false
+  },
+  {
+    "id": "default-127",
+    "file": "ドリフ_だめだこりゃ.wav",
+    "name": "ドリフ だめだこりゃ",
+    "category": "コミカル",
+    "color": "#ef4444",
+    "loop": false
+  },
+  {
+    "id": "default-128",
+    "file": "お分かりいただけただろうか.wav",
+    "name": "お分かりいただけただろうか",
+    "category": "演出",
+    "color": "#64748b",
+    "loop": false
+  },
+  {
+    "id": "default-129",
+    "file": "Awwww.wav",
+    "name": "Awwww",
+    "category": "コミカル",
+    "color": "#ec4899",
+    "loop": false
+  },
+  {
+    "id": "default-130",
+    "file": "DuckToy.wav",
+    "name": "DuckToy",
+    "category": "コミカル",
+    "color": "#06b6d4",
+    "loop": false
+  },
+  {
+    "id": "default-131",
+    "file": "Hone.wav",
+    "name": "Hone",
+    "category": "演出",
+    "color": "#64748b",
+    "loop": false
+  },
+  {
+    "id": "default-132",
+    "file": "イーヤッホー.wav",
+    "name": "イーヤッホー",
+    "category": "コミカル",
+    "color": "#f97316",
+    "loop": false
+  },
+  {
+    "id": "default-133",
+    "file": "イヨォーッポン.wav",
+    "name": "イヨォーッポン",
+    "category": "決め音",
+    "color": "#22c55e",
+    "loop": false
+  },
+  {
+    "id": "default-134",
+    "file": "エンジェル.wav",
+    "name": "エンジェル",
+    "category": "演出",
+    "color": "#a855f7",
+    "loop": false
+  },
+  {
+    "id": "default-135",
+    "file": "スパイダーマン登場.wav",
+    "name": "スパイダーマン登場",
+    "category": "演出",
+    "color": "#ef4444",
+    "loop": false
+  }
+]

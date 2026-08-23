@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+  <meta name="theme-color" content="#090b12">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="format-detection" content="telephone=no">
+  <title>効果音サンプラー</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="rhythm.css">
+  <style>
+    [hidden]{display:none!important}
+    html,body{touch-action:manipulation}
+    input,select,textarea{font-size:16px}
+    .favorite-button{position:absolute;top:5px;right:5px;margin:0}
+    .pad-stop-button{position:absolute;z-index:4;right:5px;bottom:5px;display:grid;place-items:center;width:30px;height:30px;padding:0;color:#fff;background:rgba(5,8,14,.68);border:1px solid rgba(255,255,255,.34);border-radius:8px;font-size:.65rem}.pad-stop-button:active{transform:scale(.9);background:rgba(5,8,14,.9)}.pad.looping:after{right:39px;left:auto}
+    .status{height:44px;min-height:44px;overflow:hidden}.status>span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.status.is-hidden{visibility:hidden;pointer-events:none}
+    .pad-grid.drum-layout{grid-template-columns:repeat(4,minmax(0,1fr))!important}
+    @media (max-width:699px){.pad-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}.pad{border-radius:11px}.pad-main{padding:9px 6px 7px}.pad-file{font-size:.52rem}.pad-category{font-size:.56rem}}
+    .sheet.fallback-open{display:block!important;position:fixed;z-index:40;inset:auto 8px 0;max-width:none;margin:0 auto}.dialog-fallback-backdrop{position:fixed;z-index:39;inset:0;background:rgba(0,0,0,.72);backdrop-filter:blur(3px)}
+    .trim-editor{margin:12px 0;padding:12px;background:#0e111a;border:1px solid var(--line);border-radius:12px}.trim-editor h3{margin:0;font-size:.9rem}.trim-editor>p{margin:5px 0 10px;color:var(--muted);font-size:.68rem;line-height:1.5}.trim-editor label{grid-template-columns:1fr auto}.trim-editor label input{grid-column:1/-1}.trim-summary{display:flex;justify-content:space-between;color:var(--muted);font-size:.7rem}.trim-actions{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:10px}.trim-actions button{min-height:44px}.asset-actions{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin:12px 0}.asset-actions button{min-height:44px;color:var(--accent);background:var(--surface2);border:1px solid var(--line);border-radius:11px;font-weight:800}
+    .load-progress{margin-top:14px;text-align:left}.load-progress progress{display:block;width:100%;height:10px;margin:8px 0;overflow:hidden;accent-color:var(--accent);border:0;border-radius:99px;background:#1c2231}.load-progress progress::-webkit-progress-bar{background:#1c2231;border-radius:99px}.load-progress progress::-webkit-progress-value{background:var(--accent);border-radius:99px}.load-progress-row{display:flex;justify-content:space-between;gap:12px;color:#c7d0df;font-size:.76rem;font-weight:800}.load-progress-detail{display:block;overflow:hidden;color:#768196;text-overflow:ellipsis;white-space:nowrap;font-size:.68rem}
+    .playback-rate-summary{display:flex;align-items:center;justify-content:space-between;gap:10px}.playback-rate-summary output{color:var(--accent);font-size:1rem;font-weight:900;font-variant-numeric:tabular-nums}.playback-rate-summary small{color:var(--muted);font-size:.68rem}.playback-rate-inputs{display:grid;grid-template-columns:minmax(0,1fr) 7rem;align-items:center;gap:10px;margin-top:7px}.playback-rate-inputs>input[type=range]{min-width:0;min-height:46px}.playback-rate-number{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:6px}.sheet .playback-rate-number input[type=number]{min-width:0;min-height:46px;padding:0 8px;text-align:right;font-variant-numeric:tabular-nums}.playback-rate-number span{color:var(--muted);font-weight:900}
+    .pad-drag-handle{position:absolute;z-index:5;left:5px;bottom:5px;display:grid;place-items:center;width:32px;height:32px;padding:0;color:#fff;background:rgba(5,8,14,.72);border:1px solid rgba(255,255,255,.4);border-radius:8px;font-size:1rem;font-weight:900;line-height:1;cursor:grab;touch-action:none;-webkit-touch-callout:none}.pad-drag-handle:active{cursor:grabbing;background:rgba(5,8,14,.95)}.pad-grid.editing .pad-category{visibility:hidden}.pad-grid.is-reordering{position:relative;z-index:9;isolation:isolate}.pad.pad-placeholder{border:2px dashed var(--accent);background:rgba(103,232,194,.1);box-shadow:inset 0 0 18px rgba(103,232,194,.12)}.pad.pad-placeholder::after{content:"DROP";position:absolute;inset:0;display:grid;place-items:center;color:var(--accent);font-size:.55rem;font-weight:950;letter-spacing:.08em}.pad.dragging{position:fixed!important;z-index:50;pointer-events:none;opacity:.9;transform:scale(1.04) rotate(1deg)!important;filter:brightness(1.12);box-shadow:0 18px 38px rgba(0,0,0,.48),0 0 0 3px var(--accent);transition:none!important}.pad.dragging:after{display:none}.pad-reordering,.pad-reordering *{cursor:grabbing!important;-webkit-user-select:none!important;user-select:none!important}@media(max-width:699px){.pad-drag-handle{width:30px;height:30px}.pad-grid.editing .pad-file{opacity:.55}}
+    .pad.is-playing{outline:2px solid rgba(255,255,255,.9);outline-offset:-3px}.pad.is-playing::before{content:"";position:absolute;z-index:2;inset:3px;pointer-events:none;border:2px solid var(--accent);border-radius:11px;box-shadow:inset 0 0 16px color-mix(in srgb,var(--accent) 65%,transparent),0 0 13px color-mix(in srgb,var(--pad-color) 75%,transparent);animation:padActivePulse .8s ease-in-out infinite}.pad-playing-indicator{position:absolute;z-index:3;top:6px;right:6px;display:none;align-items:end;justify-content:center;gap:2px;width:23px;height:19px;padding:4px;color:#07120f;background:var(--accent);border:1px solid rgba(255,255,255,.7);border-radius:6px;box-shadow:0 3px 10px rgba(0,0,0,.28);pointer-events:none}.pad.is-playing .pad-playing-indicator{display:flex}.pad-grid.editing .pad-playing-indicator{display:none}.pad-playing-indicator i{display:block;width:3px;height:5px;background:currentColor;border-radius:2px;animation:padLevel .55s ease-in-out infinite alternate}.pad-playing-indicator i:nth-child(2){height:10px;animation-delay:-.35s}.pad-playing-indicator i:nth-child(3){height:7px;animation-delay:-.18s}.pad-playing-indicator[data-count]::after{content:attr(data-count);position:absolute;right:-5px;bottom:-6px;display:grid;place-items:center;min-width:14px;height:14px;padding:0 3px;color:#fff;background:#d83d54;border:1px solid rgba(255,255,255,.8);border-radius:99px;font-size:.48rem;font-weight:950;font-variant-numeric:tabular-nums}@keyframes padActivePulse{50%{opacity:.42;transform:scale(.965)}}@keyframes padLevel{to{height:12px}}@media(prefers-reduced-motion:reduce){.pad.is-playing::before,.pad-playing-indicator i{animation:none!important}.pad.is-playing::before{opacity:1}.pad-playing-indicator i:nth-child(1){height:5px}.pad-playing-indicator i:nth-child(2){height:10px}.pad-playing-indicator i:nth-child(3){height:7px}}
+  </style>
+</head>
+<body>
+  <div id="startScreen" class="start-screen">
+    <div class="start-card">
+      <span class="start-icon">◉</span>
+      <p class="eyebrow">POCKET SOUND LAB</p>
+      <h1>効果音サンプラー</h1>
+      <p>低遅延サウンドパッドを起動します。iPhoneでは最初の操作が必要です。</p>
+      <button id="startButton" class="primary-button" type="button">サンプラー開始</button>
+      <div id="loadProgress" class="load-progress" hidden>
+        <div class="load-progress-row"><span id="loadProgressText">準備中…</span><span id="loadProgressCount">0 / 0</span></div>
+        <progress id="loadProgressBar" max="1" value="0"></progress>
+        <span id="loadProgressDetail" class="load-progress-detail">音声機能を準備しています</span>
+      </div>
+      <small>音が鳴らない場合は、マナーモードと端末音量も確認してください。</small>
+    </div>
+  </div>
+
+  <main id="app" class="app" hidden>
+    <header class="topbar">
+      <div><a href="../../browser-game/" class="back-link">← メニュー</a><h1>効果音サンプラー</h1></div>
+      <button id="editButton" class="icon-button" type="button" aria-pressed="false">編集</button>
+    </header>
+
+    <section class="master-panel" aria-label="全体操作">
+      <button id="stopButton" class="stop-button" type="button">■ 全停止</button>
+      <label class="master-volume" for="masterVolume"><span>全体音量</span><input id="masterVolume" type="range" min="0" max="1" step="0.01" value="0.8"><output id="masterVolumeValue">80%</output></label>
+      <div class="quick-actions">
+        <button id="rhythmButton" type="button">♬ リズム</button>
+        <button id="addButton" type="button">＋ 音源追加</button>
+        <button id="recordButton" type="button">● 録音</button>
+        <button id="dataButton" type="button">⚙ データ</button>
+      </div>
+      <input id="fileInput" class="visually-hidden" type="file" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg" multiple>
+    </section>
+
+    <div id="status" class="status is-hidden" role="status" aria-live="polite" aria-hidden="true"><span id="statusText"></span><button id="statusClose" type="button" aria-label="閉じる">×</button></div>
+    <nav id="categoryTabs" class="category-tabs" aria-label="カテゴリ"></nav>
+
+    <section class="pads-section" aria-labelledby="padsTitle">
+      <div class="section-heading"><h2 id="padsTitle">サウンドパッド</h2><span id="soundCount">0 sounds</span></div>
+      <div id="editBanner" class="edit-banner" hidden>編集中：⠿をドラッグして並べ替え／★でお気に入り切替／パッドで設定</div>
+      <div id="padGrid" class="pad-grid"></div>
+      <div id="emptyState" class="empty-state" hidden>このカテゴリに音源はありません。</div>
+    </section>
+  </main>
+
+  <section id="rhythmScreen" class="rhythm-screen" hidden>
+    <header class="rhythm-header">
+      <button id="rhythmBack" class="rhythm-back" type="button">← パッドへ戻る</button>
+      <div><p class="eyebrow">BACK RHYTHM</p><h1>バックリズム</h1></div>
+      <span id="rhythmRunningBadge" class="running-badge" hidden>PLAYING</span>
+    </header>
+
+    <div class="transport-card">
+      <div class="beat-lamps" aria-label="現在の拍"><i data-beat="0"></i><i data-beat="1"></i><i data-beat="2"></i><i data-beat="3"></i></div>
+      <div class="transport-actions"><button id="rhythmStart" class="rhythm-play" type="button">▶ リズム開始</button><button id="rhythmStop" type="button">■ 停止</button><button id="tapTempo" type="button">TAP</button></div>
+      <label class="rhythm-range">テンポ <strong><output id="bpmValue">120</output> BPM</strong><input id="bpm" type="range" min="60" max="200" step="1" value="120"></label>
+      <label class="rhythm-field">パターン<select id="rhythmPattern"></select></label>
+      <label class="rhythm-range">リズム音量 <output id="rhythmVolumeValue">70%</output><input id="rhythmVolume" type="range" min="0" max="1" step="0.01" value="0.7"></label>
+      <div class="track-switches"><label><input id="drumEnabled" type="checkbox" checked><span>DRUM</span></label><label><input id="bassEnabled" type="checkbox" checked><span>BASS</span></label></div>
+    </div>
+
+    <details class="rhythm-details">
+      <summary>詳細設定</summary>
+      <div class="detail-grid">
+        <label class="rhythm-range">ドラム音量 <output id="drumVolumeValue">85%</output><input id="drumVolume" type="range" min="0" max="1" step="0.01" value="0.85"></label>
+        <label class="rhythm-range">ベース音量 <output id="bassVolumeValue">70%</output><input id="bassVolume" type="range" min="0" max="1" step="0.01" value="0.7"></label>
+        <label class="rhythm-field">ベース音程<select id="bassNote"><option>C</option><option>D</option><option>E</option><option>F</option><option>G</option><option>A</option><option>B</option></select></label>
+        <label class="check-row"><input id="countIn" type="checkbox"> 1小節カウントイン</label>
+        <label class="check-row"><input id="ducking" type="checkbox"> パッド再生時にダッキング</label>
+      </div>
+      <h2>トラック</h2><div id="trackControls" class="track-controls"></div>
+    </details>
+
+    <section id="sequencerSection" class="sequencer-card" hidden>
+      <div><p class="eyebrow">CUSTOM PATTERN</p><h2>16ステップ・シーケンサー</h2></div>
+      <div id="sequencer" class="sequencer"></div>
+      <button id="clearSequence" type="button">パターンをクリア</button>
+    </section>
+    <div id="rhythmStatus" class="rhythm-status" role="status">リズム音源は開始時に準備されます。</div>
+  </section>
+
+  <dialog id="settingsDialog" class="sheet">
+    <form id="settingsForm" method="dialog">
+      <div class="sheet-handle"></div>
+      <header><div><p class="eyebrow">PAD SETTINGS</p><h2>パッド設定</h2></div><button class="close-button" value="cancel" aria-label="閉じる">×</button></header>
+      <input id="settingId" type="hidden">
+      <label>表示名<input id="settingName" maxlength="80" required></label>
+      <p class="file-info">ファイル：<span id="settingFile"></span></p>
+      <label>カテゴリ<input id="settingCategory" list="categoryList" maxlength="40"><datalist id="categoryList"></datalist></label>
+      <fieldset><legend>パッド色</legend><div class="color-row"><input id="settingColor" type="color"><div id="colorPresets" class="color-presets"></div><button id="resetColorButton" type="button">初期色</button></div></fieldset>
+      <div class="toggle-grid"><label><input id="settingFavorite" type="checkbox"> ★ お気に入り</label><label><input id="settingLoop" type="checkbox"> ↻ ループ</label></div>
+      <label>個別音量 <output id="settingVolumeValue">100%</output><input id="settingVolume" type="range" min="0" max="1" step="0.01"></label>
+      <fieldset class="playback-rate-control">
+        <legend>再生速度</legend>
+        <div class="playback-rate-summary"><output id="settingRateValue" for="settingRate settingRateNumber">1.00×</output><small>0.50～2.00倍・0.01刻み</small></div>
+        <div class="playback-rate-inputs">
+          <input id="settingRate" type="range" min="0.5" max="2" step="0.01" value="1" aria-label="再生速度スライダー" aria-valuetext="1.00倍">
+          <span class="playback-rate-number"><input id="settingRateNumber" type="number" min="0.5" max="2" step="0.01" value="1.00" inputmode="decimal" aria-label="再生速度の数値"><span aria-hidden="true">×</span></span>
+        </div>
+      </fieldset>
+      <section id="trimEditor" class="trim-editor" hidden>
+        <h3>使用する録音区間</h3><p>元の録音は残したまま、パッドで鳴らす開始・終了位置を指定します。</p>
+        <label>開始位置 <output id="trimStartValue">0.00秒</output><input id="trimStart" type="range" min="0" max="1" step="0.01" value="0"></label>
+        <label>終了位置 <output id="trimEndValue">0.00秒</output><input id="trimEnd" type="range" min="0" max="1" step="0.01" value="1"></label>
+        <div class="trim-summary"><span>元音源：<output id="trimDuration">0.00秒</output></span><span>使用区間：<output id="trimLength">0.00秒</output></span></div>
+        <div class="trim-actions"><button id="trimPreview" type="button">▶ 区間をテスト</button><button id="trimPreviewStop" type="button">■ テスト停止</button></div>
+      </section>
+      <div class="asset-actions"><button id="duplicatePadButton" type="button">⧉ 音源を複製</button><button id="downloadPadButton" type="button">↓ WAVで保存</button></div>
+      <fieldset><legend>並び順</legend><div class="order-actions"><button data-move="first" type="button">先頭</button><button data-move="prev" type="button">前へ</button><button data-move="next" type="button">後ろへ</button><button data-move="last" type="button">最後</button></div></fieldset>
+      <div class="sheet-actions"><button id="resetPadButton" type="button">設定を初期化</button><button id="deletePadButton" class="danger" type="button">削除</button><button class="primary-button" value="save">保存</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="addDialog" class="sheet small-sheet"><form id="addForm" method="dialog"><div class="sheet-handle"></div><header><h2>音源を追加</h2><button class="close-button" value="cancel">×</button></header><p id="addFileSummary"></p><label>表示名<input id="addName" maxlength="80"></label><label>カテゴリ<input id="addCategory" list="categoryList" value="未分類"></label><label>パッド色<input id="addColor" type="color" value="#3b82f6"></label><div class="toggle-grid"><label><input id="addFavorite" type="checkbox"> ★ お気に入り</label><label><input id="addLoop" type="checkbox"> ↻ ループ</label></div><div class="sheet-actions"><button value="cancel">キャンセル</button><button class="primary-button" value="save">追加</button></div></form></dialog>
+
+  <dialog id="recordDialog" class="sheet small-sheet"><div class="sheet-handle"></div><header><h2>マイク録音</h2><button id="recordClose" class="close-button" type="button">×</button></header><div id="recordIdle" class="record-stage"><div class="record-orb">●</div><p>最大30秒まで録音できます</p><button id="recordStart" class="record-action" type="button">録音開始</button></div><div id="recordActive" class="record-stage" hidden><div class="record-orb active">●</div><strong id="recordTimer">00:00</strong><div class="meter"><span id="recordMeter"></span></div><button id="recordStop" class="record-action" type="button">録音停止</button><button id="recordCancel" type="button">キャンセル</button></div><div id="recordPreview" class="record-stage" hidden><audio id="recordAudio" controls></audio><label>表示名<input id="recordName" value="録音音源"></label><label>カテゴリ<input id="recordCategory" list="categoryList" value="録音"></label><label>パッド色<input id="recordColor" type="color" value="#ef4444"></label><div class="toggle-grid"><label><input id="recordFavorite" type="checkbox"> ★ お気に入り</label><label><input id="recordLoop" type="checkbox"> ↻ ループ</label></div><div class="sheet-actions"><button id="recordRetry" type="button">録り直し</button><button id="recordSave" class="primary-button" type="button">保存</button></div></div></dialog>
+
+  <dialog id="dataDialog" class="sheet small-sheet"><div class="sheet-handle"></div><header><h2>データ管理</h2><button class="close-button" data-close="dataDialog" type="button">×</button></header><div class="storage-card"><span>概算使用量</span><strong id="storageUsage">計算中…</strong></div><div class="data-actions"><button id="exportButton" type="button">設定をエクスポート</button><label class="button-label">設定をインポート<input id="importInput" type="file" accept="application/json,.json"></label><button id="deleteUploadsButton" class="danger" type="button">追加音源をすべて削除</button><button id="deleteRecordingsButton" class="danger" type="button">録音音源をすべて削除</button><button id="resetSettingsButton" type="button">パッド設定を初期化</button><button id="resetAllButton" class="danger" type="button">すべてのデータを初期化</button></div></dialog>
+
+  <script src="rhythm.js?v=20260719-1"></script>
+  <script src="main.js?v=20260814-1"></script>
+</body>
+</html>

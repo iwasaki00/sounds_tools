@@ -1,0 +1,114 @@
+[
+  {
+    "id": "drum-016",
+    "file": "16_conga_high.wav",
+    "name": "コンガ HIGH",
+    "color": "#7c3aed",
+    "loop": false
+  },
+  {
+    "id": "drum-015",
+    "file": "15_conga_low.wav",
+    "name": "コンガ LOW",
+    "color": "#7c3aed",
+    "loop": false
+  },
+  {
+    "id": "drum-014",
+    "file": "14_tom_high.wav",
+    "name": "タム HIGH",
+    "color": "#7c3aed",
+    "loop": false
+  },
+  {
+    "id": "drum-013",
+    "file": "13_tom_low.wav",
+    "name": "タム LOW",
+    "color": "#7c3aed",
+    "loop": false
+  },
+  {
+    "id": "drum-012",
+    "file": "12_shaker.wav",
+    "name": "シェイカー",
+    "color": "#0891b2",
+    "loop": false
+  },
+  {
+    "id": "drum-010",
+    "file": "10_hihat_pedal.wav",
+    "name": "ハイハット ペダル",
+    "color": "#0891b2",
+    "loop": false
+  },
+  {
+    "id": "drum-011",
+    "file": "11_hihat_open.wav",
+    "name": "ハイハット OPEN",
+    "color": "#0891b2",
+    "loop": false
+  },
+  {
+    "id": "drum-009",
+    "file": "09_hihat_closed.wav",
+    "name": "ハイハット CLOSED",
+    "color": "#0891b2",
+    "loop": false
+  },
+  {
+    "id": "drum-007",
+    "file": "07_finger_snap.wav",
+    "name": "フィンガースナップ",
+    "color": "#c77800",
+    "loop": false
+  },
+  {
+    "id": "drum-006",
+    "file": "06_clap_group.wav",
+    "name": "グループクラップ",
+    "color": "#c77800",
+    "loop": false
+  },
+  {
+    "id": "drum-005",
+    "file": "05_clap_hand.wav",
+    "name": "ハンドクラップ",
+    "color": "#c77800",
+    "loop": false
+  },
+  {
+    "id": "drum-008",
+    "file": "08_rimshot.wav",
+    "name": "リムショット",
+    "color": "#c77800",
+    "loop": false
+  },
+  {
+    "id": "drum-004",
+    "file": "04_snare_tight.wav",
+    "name": "スネア TIGHT",
+    "color": "#dc2626",
+    "loop": false
+  },
+  {
+    "id": "drum-003",
+    "file": "03_snare_main.wav",
+    "name": "スネア MAIN",
+    "color": "#dc2626",
+    "loop": false
+  },
+  {
+    "id": "drum-002",
+    "file": "02_kick_tight.wav",
+    "name": "キック TIGHT",
+    "color": "#dc2626",
+    "loop": false
+  },
+  {
+    "id": "drum-001",
+    "file": "01_kick_deep.wav",
+    "name": "キック DEEP",
+    "color": "#dc2626",
+    "loop": false
+  }
+]
