@@ -182,7 +182,27 @@ body[data-mode="PAD"] .quick-settings { grid-template-columns:1fr; }
 .loop-action { font-size:1.48rem; letter-spacing:-.03em; }.loop-button small{margin-top:1px;font-size:.49rem}
 .secondary-controls { gap:5px; }.secondary-controls button{min-height:40px;border-radius:9px;font-size:.61rem}
 .transport-card .pad-test-controls { gap:5px; margin-top:6px; }.transport-card .pad-test-controls button{min-height:34px;border-radius:8px;font-size:.56rem}
-.countdown-overlay { border-radius:13px; }.countdown-overlay strong{font-size:clamp(4rem,24vw,7rem)}
+.countdown-overlay {
+  position:fixed;
+  inset:auto 10px auto auto;
+  top:calc(env(safe-area-inset-top, 0px) + 52px);
+  z-index:30;
+  width:126px;
+  min-height:98px;
+  padding:10px 8px;
+  border:1px solid rgba(55,230,202,.48);
+  border-radius:13px;
+  background:rgba(8,10,13,.9);
+  box-shadow:0 12px 34px rgba(0,0,0,.5),0 0 18px rgba(55,230,202,.12);
+  backdrop-filter:blur(9px);
+  -webkit-backdrop-filter:blur(9px);
+  pointer-events:none;
+}
+.countdown-overlay strong { margin:2px 0; font-size:3.25rem; }
+.countdown-overlay span { font-size:.58rem; }
+.countdown-overlay small { max-width:100%; overflow:hidden; font-size:.5rem; letter-spacing:.06em; text-align:center; white-space:nowrap; }
+.countdown-overlay.is-go { border-color:rgba(255,75,86,.55); box-shadow:0 12px 34px rgba(0,0,0,.5),0 0 20px rgba(255,75,86,.16); }
+.countdown-overlay.is-go strong { font-size:2.15rem; }
 
 @keyframes recordPulse{50%{box-shadow:0 16px 45px #050607,0 0 28px rgba(255,75,86,.2)}}@keyframes playPulse{50%{opacity:.55}}
 [hidden] { display:none !important; }
