@@ -82,8 +82,8 @@ const elements = {
   recordingProgress: $('#recordingProgress'),
   recBarLabel: $('#recBarLabel'),
   completedBarsLabel: $('#completedBarsLabel'),
-  micModeButton: $('#micModeButton'),
-  padModeButton: $('#padModeButton'),
+  modeToggleButton: $('#modeToggleButton'),
+  modeToggleLabel: $('#modeToggleLabel'),
   padLoopBars: $('#padLoopBars'),
   padButtons: [...document.querySelectorAll('[data-pad]')],
   demoBeatButton: $('#demoBeatButton'),
@@ -151,8 +151,7 @@ elements.overdubQuantizeButton.addEventListener('click', () => {
   engine.setQuantizedOverdub(!engine.quantizedOverdub);
   renderSettingToggles();
 });
-elements.micModeButton.addEventListener('click', () => runSafely(() => switchMode('MIC')));
-elements.padModeButton.addEventListener('click', () => runSafely(() => switchMode('PAD')));
+elements.modeToggleButton.addEventListener('click', () => runSafely(() => switchMode(currentMode === 'PAD' ? 'MIC' : 'PAD')));
 elements.padLoopBars.addEventListener('change', () => padLooper?.setLoopBars(elements.padLoopBars.value));
 elements.demoBeatButton.addEventListener('click', () => padLooper?.createDemoBeat(false));
 elements.testClickButton.addEventListener('click', () => padLooper?.createDemoBeat(true));
@@ -638,8 +637,9 @@ async function switchMode(mode) {
 
 function renderMode() {
   document.body.dataset.mode = currentMode;
-  elements.micModeButton.setAttribute('aria-pressed', String(currentMode === 'MIC'));
-  elements.padModeButton.setAttribute('aria-pressed', String(currentMode === 'PAD'));
+  elements.modeToggleLabel.textContent = currentMode;
+  elements.modeToggleButton.setAttribute('aria-label', `${currentMode === 'PAD' ? 'MIC' : 'PAD'} LOOPERへ切替`);
+  elements.modeToggleButton.dataset.mode = currentMode;
   elements.exportButton.disabled = currentMode === 'PAD';
   elements.padLoopBars.value = String(padLooper.loopBars);
   renderState(currentMode === 'PAD' ? padLooper.state : engine.state);

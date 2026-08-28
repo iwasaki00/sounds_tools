@@ -35,60 +35,41 @@
           <p class="kicker">Phase 1 / Engine Test</p>
           <h1>LIVE LOOPER</h1>
         </div>
-        <span class="engine-badge" id="engineBadge"><i></i> <span>READY</span></span>
+        <div class="header-actions">
+          <button class="mode-toggle" id="modeToggleButton" type="button" aria-label="MIC LOOPERへ切替"><small>MODE</small><b id="modeToggleLabel">PAD</b></button>
+          <span class="engine-badge" id="engineBadge"><i></i> <span>READY</span></span>
+        </div>
       </header>
 
-      <section class="mode-card" aria-label="ルーパーモード">
-        <span>MODE</span>
-        <div class="mode-switch" role="group" aria-label="モード切替">
-          <button id="micModeButton" type="button" aria-pressed="false">MIC LOOPER</button>
-          <button id="padModeButton" type="button" aria-pressed="true">PAD LOOPER <i></i></button>
-        </div>
-      </section>
-
       <section class="tempo-card" aria-label="テンポと拍">
-        <div class="tempo-heading">
-          <div><span>TEMPO</span><strong><b id="bpmValue">100</b> BPM</strong></div>
-          <div class="time-signature"><span>TIME</span><strong id="timeSignature">4 / 4</strong></div>
-        </div>
-        <div class="bpm-controls" aria-label="BPM調整">
-          <button type="button" data-bpm-delta="-5">−5</button>
-          <button type="button" data-bpm-delta="-1">−1</button>
-          <button class="tap-tempo" id="tapTempoButton" type="button">TAP</button>
-          <button type="button" data-bpm-delta="1">+1</button>
-          <button type="button" data-bpm-delta="5">+5</button>
+        <div class="tempo-top">
+          <div class="tempo-heading">
+            <div><span>TEMPO</span><strong><b id="bpmValue">100</b> BPM</strong></div>
+            <div class="time-signature"><span>TIME</span><strong id="timeSignature">4 / 4</strong></div>
+          </div>
+          <div class="bpm-controls" aria-label="BPM調整">
+            <button type="button" data-bpm-delta="-5">−5</button>
+            <button type="button" data-bpm-delta="-1">−1</button>
+            <button class="tap-tempo" id="tapTempoButton" type="button">TAP</button>
+            <button type="button" data-bpm-delta="1">+1</button>
+            <button type="button" data-bpm-delta="5">+5</button>
+          </div>
         </div>
         <p class="tempo-lock-status" id="tempoLockStatus" hidden>BPM LOCKED WHILE LOOPING</p>
-        <div class="musical-position">
-          <div class="bar-readout"><span>BAR</span><strong id="barNumber">—</strong></div>
-          <div class="recording-indicator" id="recordingIndicator"><i></i><span>READY</span></div>
-        </div>
-        <div class="beat-guide" id="beatGuide" aria-label="現在の拍">
-          <div class="beat-numbers"><span>1</span><span>2</span><span>3</span><span>4</span></div>
-          <div class="beat-dots"><i data-beat="1"></i><i data-beat="2"></i><i data-beat="3"></i><i data-beat="4"></i></div>
+        <div class="tempo-lower">
+          <div class="musical-position">
+            <div class="bar-readout"><span>BAR</span><strong id="barNumber">—</strong></div>
+            <div class="recording-indicator" id="recordingIndicator"><i></i><span>READY</span></div>
+          </div>
+          <div class="beat-guide" id="beatGuide" aria-label="現在の拍">
+            <div class="beat-numbers"><span>1</span><span>2</span><span>3</span><span>4</span></div>
+            <div class="beat-dots"><i data-beat="1"></i><i data-beat="2"></i><i data-beat="3"></i><i data-beat="4"></i></div>
+          </div>
         </div>
         <div class="recording-progress" id="recordingProgress" hidden>
           <strong id="recBarLabel">REC BAR 1</strong>
           <small id="completedBarsLabel">Completed Bars: 0</small>
         </div>
-      </section>
-
-      <section class="pad-panel pad-only" id="padPanel" aria-label="PAD LOOPER">
-        <div class="pad-toolbar">
-          <label for="padLoopBars"><span>LOOP LENGTH</span><small>録音後は自動終了</small></label>
-          <select id="padLoopBars"><option value="1">1 BAR</option><option value="2">2 BARS</option><option value="4" selected>4 BARS</option><option value="8">8 BARS</option></select>
-        </div>
-        <div class="pad-grid" id="padGrid">
-          <button type="button" data-pad="kick"><b>KICK</b><small>1</small></button>
-          <button type="button" data-pad="snare"><b>SNARE</b><small>2</small></button>
-          <button type="button" data-pad="closed-hat"><b>CLOSED HAT</b><small>3</small></button>
-          <button type="button" data-pad="open-hat"><b>OPEN HAT</b><small>4</small></button>
-          <button type="button" data-pad="clap"><b>CLAP</b><small>5</small></button>
-          <button type="button" data-pad="rim"><b>RIM</b><small>6</small></button>
-          <button type="button" data-pad="bass"><b>BASS</b><small>7</small></button>
-          <button type="button" data-pad="synth"><b>SYNTH</b><small>8</small></button>
-        </div>
-        <div class="pad-test-controls"><button id="demoBeatButton" type="button">DEMO BEAT</button><button id="testClickButton" type="button">TEST CLICK</button></div>
       </section>
 
       <section class="transport-card" aria-label="ループ操作">
@@ -101,10 +82,21 @@
           <span>MASTER LOOP</span>
           <strong id="loopLength">—.— — sec</strong>
         </div>
+        <div class="compact-loop-length pad-only">
+          <label for="padLoopBars">LOOP LENGTH</label>
+          <select id="padLoopBars"><option value="1">1 BAR</option><option value="2">2 BARS</option><option value="4" selected>4 BARS</option><option value="8">8 BARS</option></select>
+        </div>
         <div class="progress-track"><span id="progressFill"></span><i id="progressHead"></i></div>
         <div class="progress-labels"><span>0.0</span><span id="loopPosition">READY</span><span id="loopEnd">—.—</span></div>
 
         <div class="loop-counter"><span>LOOP COUNT</span><strong id="loopCount">0</strong></div>
+
+        <div class="pad-grid pad-only" id="padGrid">
+          <button type="button" data-pad="kick"><b>KICK</b><small>1</small></button><button type="button" data-pad="snare"><b>SNARE</b><small>2</small></button>
+          <button type="button" data-pad="closed-hat"><b>CLOSED<br>HAT</b><small>3</small></button><button type="button" data-pad="open-hat"><b>OPEN<br>HAT</b><small>4</small></button>
+          <button type="button" data-pad="clap"><b>CLAP</b><small>5</small></button><button type="button" data-pad="rim"><b>RIM</b><small>6</small></button>
+          <button type="button" data-pad="bass"><b>BASS</b><small>7</small></button><button type="button" data-pad="synth"><b>SYNTH</b><small>8</small></button>
+        </div>
 
         <button class="loop-button" id="loopButton" type="button">
           <span class="loop-button-ring"></span>
@@ -117,6 +109,7 @@
           <button id="stopButton" type="button" disabled>STOP</button>
           <button class="danger" id="clearButton" type="button" disabled>CLEAR</button>
         </div>
+        <div class="pad-test-controls pad-only"><button id="demoBeatButton" type="button">DEMO BEAT</button><button id="testClickButton" type="button">TEST CLICK</button></div>
       </section>
 
       <section class="meter-card mic-only">
