@@ -70,14 +70,10 @@ export class LooperEngine extends EventTarget {
     this.recordingEndDebug = this.createEmptyRecordingEndDebug();
   }
 
-  async initialize() {
+  async initialize({ microphone = true } = {}) {
     if (!window.AudioContext && !window.webkitAudioContext) {
       throw new Error('Web Audio API is not supported.');
     }
-    if (!navigator.mediaDevices?.getUserMedia) {
-      throw new Error('Microphone input is not supported. Use HTTPS on iPhone Safari.');
-    }
-
     const AudioContextClass = window.AudioContext || window.webkitAudioContext;
     try {
       this.context = new AudioContextClass({ latencyHint: 'interactive' });
@@ -87,19 +83,6 @@ export class LooperEngine extends EventTarget {
     this.log('AudioContext created');
     await this.context.resume();
 
-    try {
-      this.stream = await navigator.mediaDevices.getUserMedia({ audio: REQUESTED_CONSTRAINTS });
-      this.log('Microphone permission granted');
-    } catch (firstError) {
-      this.log(`Requested constraints failed: ${firstError.name}`);
-      this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      this.log('Microphone permission granted (fallback constraints)');
-    }
-
-    this.micSource = this.context.createMediaStreamSource(this.stream);
-    this.inputAnalyser = this.context.createAnalyser();
-    this.inputAnalyser.fftSize = 1024;
-    this.inputAnalyser.smoothingTimeConstant = 0.72;
     this.outputAnalyser = this.context.createAnalyser();
     this.outputAnalyser.fftSize = 1024;
     this.outputAnalyser.smoothingTimeConstant = 0.76;
@@ -107,15 +90,12 @@ export class LooperEngine extends EventTarget {
     this.monitorGain = this.context.createGain();
     this.monitorGain.gain.value = 0;
 
-    this.micSource.connect(this.inputAnalyser);
-    this.micSource.connect(this.monitorGain);
     this.monitorGain.connect(this.masterGain);
     this.masterGain.connect(this.outputAnalyser);
     this.outputAnalyser.connect(this.context.destination);
 
-    this.recorder = new PCMRecorder(this.context, this.micSource, (message) => this.log(message));
-    await this.recorder.initialize();
     this.tempo = new TempoClock(this.context, this.masterGain, (message) => this.log(message));
+    if (microphone) await this.enableMicrophone();
     this.setMasterVolume(0.82);
     this.installLifecycleListeners();
     this.emit('initialized', this.getDebugInfo());
@@ -128,11 +108,31 @@ export class LooperEngine extends EventTarget {
       this.log(`AudioContext state: ${this.context.state}`);
       this.emit('contextstate', { state: this.context.state });
     });
-    this.stream.getAudioTracks().forEach((track) => {
-      track.addEventListener('ended', () => {
-        this.fail(new Error('Microphone was disconnected.'));
-      });
-    });
+  }
+
+  async enableMicrophone() {
+    if (this.recorder && this.stream?.active) return;
+    if (!navigator.mediaDevices?.getUserMedia) {
+      throw new Error('Microphone input is not supported. Use HTTPS on iPhone Safari.');
+    }
+    try {
+      this.stream = await navigator.mediaDevices.getUserMedia({ audio: REQUESTED_CONSTRAINTS });
+      this.log('Microphone permission granted');
+    } catch (firstError) {
+      this.log(`Requested constraints failed: ${firstError.name}`);
+      this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      this.log('Microphone permission granted (fallback constraints)');
+    }
+    this.micSource = this.context.createMediaStreamSource(this.stream);
+    this.inputAnalyser = this.context.createAnalyser();
+    this.inputAnalyser.fftSize = 1024;
+    this.inputAnalyser.smoothingTimeConstant = 0.72;
+    this.micSource.connect(this.inputAnalyser);
+    this.micSource.connect(this.monitorGain);
+    this.recorder = new PCMRecorder(this.context, this.micSource, (message) => this.log(message));
+    await this.recorder.initialize();
+    this.stream.getAudioTracks().forEach((track) => track.addEventListener('ended', () => this.fail(new Error('Microphone was disconnected.'))));
+    this.emit('microphoneready', { stream: this.stream });
   }
 
   setState(state) {
@@ -142,6 +142,7 @@ export class LooperEngine extends EventTarget {
 
   async startFirstRecording() {
     this.assertState(STATES.IDLE);
+    if (!this.recorder) throw new Error('Switch to MIC LOOPER and allow microphone access first.');
     this.log('REC requested');
     const startTime = this.tempo.beginCountIn();
     this.pendingRecordingStart = startTime;

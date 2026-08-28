@@ -10,16 +10,16 @@
   <title>Live Looper — Phase 1</title>
   <link rel="stylesheet" href="css/style.css">
 </head>
-<body>
+<body data-mode="PAD">
   <main class="app-shell">
     <section class="start-screen" id="startScreen">
       <p class="kicker">Looper Engine / Phase 1</p>
       <h1>LIVE<br><span>LOOPER</span></h1>
-      <p class="start-copy">声や楽器をその場で録音し、重ねていくライブ・ルーパー検証機です。</p>
+      <p class="start-copy">内蔵パッド音源とマイク録音を切り替え、ループ精度を検証できます。</p>
       <button class="start-button" id="startAudioButton" type="button">
         <span class="start-icon" aria-hidden="true"></span>
         <span>オーディオ開始</span>
-        <small>マイクの使用を許可してください</small>
+        <small>PADモードはマイク権限なしで開始できます</small>
       </button>
       <p class="secure-note">iPhone Safari・HTTPS環境を推奨</p>
     </section>
@@ -37,6 +37,14 @@
         </div>
         <span class="engine-badge" id="engineBadge"><i></i> <span>READY</span></span>
       </header>
+
+      <section class="mode-card" aria-label="ルーパーモード">
+        <span>MODE</span>
+        <div class="mode-switch" role="group" aria-label="モード切替">
+          <button id="micModeButton" type="button" aria-pressed="false">MIC LOOPER</button>
+          <button id="padModeButton" type="button" aria-pressed="true">PAD LOOPER <i></i></button>
+        </div>
+      </section>
 
       <section class="tempo-card" aria-label="テンポと拍">
         <div class="tempo-heading">
@@ -63,6 +71,24 @@
           <strong id="recBarLabel">REC BAR 1</strong>
           <small id="completedBarsLabel">Completed Bars: 0</small>
         </div>
+      </section>
+
+      <section class="pad-panel pad-only" id="padPanel" aria-label="PAD LOOPER">
+        <div class="pad-toolbar">
+          <label for="padLoopBars"><span>LOOP LENGTH</span><small>録音後は自動終了</small></label>
+          <select id="padLoopBars"><option value="1">1 BAR</option><option value="2">2 BARS</option><option value="4" selected>4 BARS</option><option value="8">8 BARS</option></select>
+        </div>
+        <div class="pad-grid" id="padGrid">
+          <button type="button" data-pad="kick"><b>KICK</b><small>1</small></button>
+          <button type="button" data-pad="snare"><b>SNARE</b><small>2</small></button>
+          <button type="button" data-pad="closed-hat"><b>CLOSED HAT</b><small>3</small></button>
+          <button type="button" data-pad="open-hat"><b>OPEN HAT</b><small>4</small></button>
+          <button type="button" data-pad="clap"><b>CLAP</b><small>5</small></button>
+          <button type="button" data-pad="rim"><b>RIM</b><small>6</small></button>
+          <button type="button" data-pad="bass"><b>BASS</b><small>7</small></button>
+          <button type="button" data-pad="synth"><b>SYNTH</b><small>8</small></button>
+        </div>
+        <div class="pad-test-controls"><button id="demoBeatButton" type="button">DEMO BEAT</button><button id="testClickButton" type="button">TEST CLICK</button></div>
       </section>
 
       <section class="transport-card" aria-label="ループ操作">
@@ -93,14 +119,14 @@
         </div>
       </section>
 
-      <section class="meter-card">
+      <section class="meter-card mic-only">
         <div class="meter-row"><span>INPUT</span><div class="meter"><i id="inputMeter"></i></div><b id="clipLabel">OK</b></div>
         <div class="meter-row"><span>OUTPUT</span><div class="meter output"><i id="outputMeter"></i></div><b>LIVE</b></div>
       </section>
 
       <section class="quick-settings">
         <label class="volume-control">MASTER <input id="masterVolume" type="range" min="0" max="100" value="82"><output id="masterVolumeValue">82%</output></label>
-        <button class="toggle-control" id="monitorButton" type="button" aria-pressed="false"><span>MIC MONITOR</span><strong>OFF</strong></button>
+        <button class="toggle-control mic-only" id="monitorButton" type="button" aria-pressed="false"><span>MIC MONITOR</span><strong>OFF</strong></button>
       </section>
 
       <section class="tempo-settings">
@@ -120,7 +146,7 @@
             <option value="ALWAYS">ALWAYS</option>
           </select>
         </div>
-        <div class="setting-row">
+        <div class="setting-row mic-only">
           <label for="recordEndSelect"><span>RECORD END</span><small>First Loopの終了判定</small></label>
           <select id="recordEndSelect">
             <option value="SMART" selected>SMART</option>
@@ -128,19 +154,19 @@
             <option value="FREE">FREE</option>
           </select>
         </div>
-        <div class="setting-row">
+        <div class="setting-row mic-only">
           <div><span>QUANTIZED OVERDUB</span><small>小節頭で開始・最寄り周回で終了</small></div>
           <button class="setting-toggle" id="overdubQuantizeButton" type="button" aria-pressed="true">ON</button>
         </div>
-        <p class="headphone-note"><strong>イヤホン推奨</strong> — 本体スピーカーのクリック音をマイクが拾う場合があります。</p>
+        <p class="headphone-note mic-only"><strong>イヤホン推奨</strong> — 本体スピーカーのクリック音をマイクが拾う場合があります。</p>
       </section>
 
-      <section class="test-controls">
+      <section class="test-controls mic-only">
         <div><strong>LOOP TEST MODE</strong><small>現在のBPMで1小節のクリックを生成</small></div>
         <button id="testSoundButton" type="button">TEST SOUND</button>
       </section>
 
-      <section class="waveform-card">
+      <section class="waveform-card mic-only">
         <div class="section-heading"><h2>FIRST LOOP</h2><span>WAVEFORM</span></div>
         <canvas id="waveformCanvas" width="640" height="150" aria-label="最初のループの波形"></canvas>
       </section>
@@ -163,6 +189,8 @@
           <section><h3>AUDIO CONSTRAINTS</h3><dl id="constraintsDebug"></dl></section>
           <section><h3>TIMING</h3><dl id="timingDebug"></dl></section>
           <section><h3>TEMPO / QUANTIZE</h3><dl id="tempoDebug"></dl></section>
+          <section class="pad-only"><h3>PAD ENGINE</h3><dl id="padDebug"></dl></section>
+          <section class="pad-only"><h3>PAD EVENTS</h3><pre class="pad-events" id="padEvents">NO EVENTS</pre></section>
           <section><h3>DEVICE</h3><dl id="deviceDebug"></dl></section>
           <section class="debug-actions">
             <h3>TOOLS</h3>

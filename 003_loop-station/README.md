@@ -1,6 +1,18 @@
 # Live Looper — Phase 1
 
-iPhone Safari上で、マイク入力の録音、即時ループ再生、オーバーダブ、長時間の同期精度を検証するVanilla JavaScript製のライブ・ルーパーです。
+iPhone Safari上で、内蔵音源によるPADイベントループとマイク録音ループを切り替え、即時再生・オーバーダブ・長時間の同期精度を検証するVanilla JavaScript製のライブ・ルーパーです。初期値はPAD LOOPERです。
+
+## PAD LOOPER
+
+「オーディオ開始」ではマイク権限を要求せず、8つの内蔵音源をすぐ試奏できます。MIC LOOPERへ切り替えた時だけマイク権限を要求します。
+
+1. LOOP LENGTHを1／2／4／8小節から選びます（初期値4小節）。
+2. RECを押すとCount-In後の1拍目からイベント記録を開始します。
+3. 選択小節数の終了時に自動確定し、待機ループを挟まず再生します。
+4. 再生中のOVERDUBは次のループ先頭で開始し、再度押すと次のループ先頭で独立Layerとして終了します。
+5. DEMO BEATはKick 1・3、Snare 2・4、Closed Hat 8分音符を生成します。TEST CLICKは毎拍RIMを鳴らし、50周以上の同期確認に使えます。
+
+パッド音は同じAudioContext上のWeb Audio API合成音です。入力はAudioBufferへ変換せず、`soundId` とループ内 `offset` のイベントとして保存されます。将来はSoundEngineへWAV Sampleを登録し、SYNTHからSAMPLEへ差し替えられる構造です。
 
 ## 起動方法
 

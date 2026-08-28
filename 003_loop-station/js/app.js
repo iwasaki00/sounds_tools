@@ -1,7 +1,10 @@
 import { LooperEngine, STATES } from './looper-engine.js';
+import { PadLooper, PAD_STATES } from './pad-looper.js';
 import { drawWaveform } from './waveform.js';
 
 const engine = new LooperEngine();
+let padLooper = null;
+let currentMode = 'PAD';
 const logs = [];
 let animationFrame = null;
 let lastDebugRender = 0;
@@ -79,6 +82,14 @@ const elements = {
   recordingProgress: $('#recordingProgress'),
   recBarLabel: $('#recBarLabel'),
   completedBarsLabel: $('#completedBarsLabel'),
+  micModeButton: $('#micModeButton'),
+  padModeButton: $('#padModeButton'),
+  padLoopBars: $('#padLoopBars'),
+  padButtons: [...document.querySelectorAll('[data-pad]')],
+  demoBeatButton: $('#demoBeatButton'),
+  testClickButton: $('#testClickButton'),
+  padDebug: $('#padDebug'),
+  padEvents: $('#padEvents'),
 };
 
 const stateView = {
@@ -93,17 +104,28 @@ const stateView = {
   [STATES.STOPPED]: { action: 'PLAY', hint: 'LOOP STOPPED' },
   [STATES.ERROR]: { action: 'ERROR', hint: 'CHECK DEBUG' },
 };
+const padStateView = {
+  [PAD_STATES.READY]: { action: 'REC', hint: 'PAD LOOP' },
+  [PAD_STATES.COUNT_IN]: { action: 'COUNT IN', hint: 'GET READY' },
+  [PAD_STATES.RECORDING]: { action: 'RECORDING', hint: 'AUTO END' },
+  [PAD_STATES.PLAYING]: { action: 'OVERDUB', hint: 'LOOP PLAYING' },
+  [PAD_STATES.OVERDUB_ARMED]: { action: 'ARMED', hint: 'NEXT LOOP' },
+  [PAD_STATES.OVERDUB_RECORDING]: { action: 'END OVERDUB', hint: 'LAYER RECORDING' },
+  [PAD_STATES.OVERDUB_ENDING]: { action: 'ENDING…', hint: 'NEXT LOOP' },
+  [PAD_STATES.STOPPED]: { action: 'PLAY', hint: 'LOOP STOPPED' },
+};
 
 elements.startButton.addEventListener('click', initializeAudio);
 elements.loopButton.addEventListener('click', handleMainAction);
-elements.undoButton.addEventListener('click', () => engine.undo());
+elements.undoButton.addEventListener('click', () => currentMode === 'PAD' ? padLooper.undo() : engine.undo());
 elements.stopButton.addEventListener('click', () => {
+  if (currentMode === 'PAD') { padLooper.state === PAD_STATES.STOPPED ? padLooper.resume() : padLooper.stop(); return; }
   if (engine.state === STATES.STOPPED) engine.resumePlayback();
   else engine.stopPlayback();
 });
 elements.clearButton.addEventListener('click', () => {
   if (window.confirm('すべてのループとオーバーダブを削除しますか？')) {
-    engine.clear();
+    currentMode === 'PAD' ? padLooper.clear() : engine.clear();
     drawWaveform(elements.waveform, null);
     hideNotice();
   }
@@ -128,6 +150,16 @@ elements.recordEndSelect.addEventListener('change', () => engine.setRecordEndMod
 elements.overdubQuantizeButton.addEventListener('click', () => {
   engine.setQuantizedOverdub(!engine.quantizedOverdub);
   renderSettingToggles();
+});
+elements.micModeButton.addEventListener('click', () => runSafely(() => switchMode('MIC')));
+elements.padModeButton.addEventListener('click', () => runSafely(() => switchMode('PAD')));
+elements.padLoopBars.addEventListener('change', () => padLooper?.setLoopBars(elements.padLoopBars.value));
+elements.demoBeatButton.addEventListener('click', () => padLooper?.createDemoBeat(false));
+elements.testClickButton.addEventListener('click', () => padLooper?.createDemoBeat(true));
+elements.padButtons.forEach((button) => {
+  const hit = (event) => { event.preventDefault(); triggerPad(button.dataset.pad, button); };
+  button.addEventListener('pointerdown', hit);
+  button.addEventListener('keydown', (event) => { if (event.key === 'Enter' || event.key === ' ') hit(event); });
 });
 
 engine.addEventListener('statechange', ({ detail }) => renderState(detail.state));
@@ -158,20 +190,25 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 window.addEventListener('pagehide', (event) => {
-  if (!event.persisted) engine.destroy();
+  if (!event.persisted) { padLooper?.destroy(); engine.destroy(); }
 });
 
 async function initializeAudio() {
   elements.startButton.disabled = true;
   elements.startButton.querySelector('span:nth-child(2)').textContent = '初期化中…';
   try {
-    await engine.initialize();
+    await engine.initialize({ microphone: false });
+    padLooper = new PadLooper(engine.context, engine.masterGain, engine.tempo, (message) => engine.log(message));
+    padLooper.addEventListener('statechange', ({ detail }) => renderState(detail.state));
+    padLooper.addEventListener('layerschange', () => renderLayers());
+    padLooper.addEventListener('eventschange', () => { if (elements.debugPanel.open) renderDebug(); });
     elements.startScreen.hidden = true;
     elements.looperScreen.hidden = false;
     renderState(STATES.IDLE);
     renderLayers();
     drawWaveform(elements.waveform, null);
     renderTempoSettings();
+    renderMode();
     startAnimation();
   } catch (error) {
     engine.destroy();
@@ -184,6 +221,16 @@ async function initializeAudio() {
 async function handleMainAction() {
   elements.loopButton.disabled = true;
   await runSafely(async () => {
+    if (currentMode === 'PAD') {
+      const actions = {
+        [PAD_STATES.READY]: () => padLooper.startRecording(),
+        [PAD_STATES.PLAYING]: () => padLooper.toggleOverdub(),
+        [PAD_STATES.OVERDUB_RECORDING]: () => padLooper.toggleOverdub(),
+        [PAD_STATES.STOPPED]: () => padLooper.resume(),
+      };
+      actions[padLooper.state]?.();
+      return;
+    }
     const actions = {
       [STATES.IDLE]: () => engine.startFirstRecording(),
       [STATES.FIRST_RECORDING]: async () => {
@@ -196,7 +243,7 @@ async function handleMainAction() {
     };
     await actions[engine.state]?.();
   });
-  renderState(engine.state);
+  renderState(currentMode === 'PAD' ? padLooper.state : engine.state);
 }
 
 async function runSafely(action) {
@@ -208,6 +255,7 @@ async function runSafely(action) {
 }
 
 function renderState(state) {
+  if (currentMode === 'PAD') { if (padLooper) renderPadState(state); return; }
   const view = stateView[state] || stateView[STATES.ERROR];
   elements.loopAction.textContent = view.action;
   elements.loopHint.textContent = view.hint;
@@ -243,8 +291,43 @@ function renderState(state) {
   renderLayers();
 }
 
+function renderPadState(state) {
+  const view = padStateView[state] || padStateView[PAD_STATES.READY];
+  const hasLoop = padLooper.hasLoop();
+  const recording = [PAD_STATES.RECORDING, PAD_STATES.OVERDUB_RECORDING, PAD_STATES.OVERDUB_ENDING].includes(state);
+  const pending = [PAD_STATES.COUNT_IN, PAD_STATES.OVERDUB_ARMED, PAD_STATES.OVERDUB_ENDING].includes(state);
+  elements.loopAction.textContent = view.action; elements.loopHint.textContent = view.hint;
+  elements.loopButton.dataset.state = state; elements.engineBadge.querySelector('span').textContent = state.replace('PAD_', '');
+  elements.engineBadge.classList.remove('error');
+  elements.loopButton.disabled = [PAD_STATES.COUNT_IN, PAD_STATES.RECORDING, PAD_STATES.OVERDUB_ARMED, PAD_STATES.OVERDUB_ENDING].includes(state);
+  elements.undoButton.disabled = padLooper.layers.length <= 1 || state !== PAD_STATES.PLAYING;
+  elements.stopButton.disabled = !hasLoop || [PAD_STATES.COUNT_IN, PAD_STATES.RECORDING].includes(state);
+  elements.stopButton.textContent = state === PAD_STATES.STOPPED ? 'PLAY' : 'STOP';
+  elements.clearButton.disabled = !hasLoop && state === PAD_STATES.READY;
+  elements.demoBeatButton.disabled = state !== PAD_STATES.READY;
+  elements.testClickButton.disabled = state !== PAD_STATES.READY;
+  elements.padLoopBars.disabled = state !== PAD_STATES.READY;
+  elements.padLoopBars.value = String(padLooper.loopBars);
+  const tempoLocked = state !== PAD_STATES.READY || hasLoop;
+  elements.bpmButtons.forEach(button => { button.disabled = tempoLocked; });
+  elements.tapTempoButton.disabled = tempoLocked; elements.tempoLockStatus.hidden = !tempoLocked;
+  elements.countInSelect.disabled = state !== PAD_STATES.READY;
+  elements.statusAudio.textContent = engine.context?.state?.toUpperCase() || 'N/A';
+  elements.statusRecorder.textContent = recording ? 'PAD EVENTS' : (pending ? 'ARMED' : 'EVENT MODE');
+  renderRecordingIndicator(state); renderLayers();
+}
+
 function renderLayers() {
-  const layers = engine.getLayers();
+  if (currentMode === 'PAD' && !padLooper) return;
+  const layers = currentMode === 'PAD' ? padLooper.getLayers() : engine.getLayers();
+  if (currentMode === 'PAD') {
+    const playing = [PAD_STATES.PLAYING, PAD_STATES.OVERDUB_ARMED, PAD_STATES.OVERDUB_RECORDING, PAD_STATES.OVERDUB_ENDING].includes(padLooper.state);
+    elements.statusLayers.textContent = String(layers.length); elements.layerCount.textContent = `${layers.length} ${layers.length === 1 ? 'LAYER' : 'LAYERS'}`;
+    if (!layers.length) { elements.layersList.className = 'empty-state'; elements.layersList.textContent = 'RECまたはDEMO BEATでイベントを作成してください'; return; }
+    elements.layersList.className = 'layers-list';
+    elements.layersList.innerHTML = layers.map((layer,index)=>`<div class="layer-row ${index?'overdub':''} ${playing?'is-playing':''}"><span class="layer-index">${index+1}</span><div>${escapeHtml(layer.type)}<span>${layer.eventCount} PAD EVENTS</span></div><time>${layer.eventCount} hits</time></div>`).join('');
+    return;
+  }
   const playing = [STATES.PLAYING, STATES.OVERDUB_PENDING, STATES.OVERDUB_RECORDING, STATES.OVERDUB_ENDING].includes(engine.state);
   elements.statusLayers.textContent = String(layers.length);
   elements.layerCount.textContent = `${layers.length} ${layers.length === 1 ? 'TRACK' : 'TRACKS'}`;
@@ -299,6 +382,19 @@ function updateMeters() {
 }
 
 function updateTransport() {
+  if (currentMode === 'PAD') {
+    const length = padLooper.loopLength;
+    const active = [PAD_STATES.PLAYING,PAD_STATES.OVERDUB_ARMED,PAD_STATES.OVERDUB_RECORDING,PAD_STATES.OVERDUB_ENDING].includes(padLooper.state);
+    const position = active ? padLooper.getCurrentPosition() : 0, percent = length ? Math.min(100, position / length * 100) : 0;
+    elements.loopLength.textContent = length ? `${length.toFixed(3)} sec / ${padLooper.loopBars} BAR` : '—.— — sec';
+    elements.loopEnd.textContent = length ? length.toFixed(1) : '—.—';
+    elements.loopPosition.textContent = length ? `${position.toFixed(2)} sec` : 'READY';
+    elements.progressFill.style.width=`${percent}%`; elements.progressHead.style.left=`${percent}%`;
+    const count = active ? padLooper.updateLoopCount() : padLooper.loopCount;
+    elements.loopCount.textContent=String(count||0); elements.statusLoopCount.textContent=String(count||0);
+    elements.statusFirstLoop.textContent=length?`${padLooper.loopBars} BAR / ${length.toFixed(3)} sec`:'N/A';
+    elements.statusMic.textContent='NOT USED'; return;
+  }
   const length = engine.getLoopLength();
   const active = [STATES.PLAYING, STATES.OVERDUB_RECORDING].includes(engine.state);
   const position = active ? engine.getCurrentPosition() : 0;
@@ -322,20 +418,28 @@ function updateTempoDisplay() {
   const position = tempo.getPosition();
   elements.bpmValue.textContent = String(tempo.bpm);
   elements.timeSignature.textContent = `${tempo.beatsPerBar} / ${tempo.beatUnit}`;
-  const firstRecording = [STATES.FIRST_RECORDING, STATES.FIRST_RECORDING_ENDING].includes(engine.state);
-  const displayBar = firstRecording ? Math.max(1, position.bar - tempo.countInBars) : position.bar;
+  const firstRecording = currentMode === 'MIC' && [STATES.FIRST_RECORDING, STATES.FIRST_RECORDING_ENDING].includes(engine.state);
+  const padActive = currentMode === 'PAD' && padLooper.state !== PAD_STATES.READY && padLooper.state !== PAD_STATES.STOPPED;
+  const displayBar = padActive && padLooper.getCurrentBar() ? `${padLooper.getCurrentBar()} / ${padLooper.loopBars}` : (firstRecording ? Math.max(1, position.bar - tempo.countInBars) : position.bar);
   elements.barNumber.textContent = displayBar > 0 ? String(displayBar) : '—';
   elements.beatDots.forEach((dot, index) => dot.classList.toggle('is-active', position.beat === index + 1));
-  const firstRecordingActive = [STATES.FIRST_RECORDING, STATES.FIRST_RECORDING_ENDING].includes(engine.state);
-  elements.recordingProgress.hidden = !firstRecordingActive;
+  const firstRecordingActive = currentMode === 'MIC' && [STATES.FIRST_RECORDING, STATES.FIRST_RECORDING_ENDING].includes(engine.state);
+  const padRecordingActive = currentMode === 'PAD' && padLooper.state === PAD_STATES.RECORDING;
+  elements.recordingProgress.hidden = !firstRecordingActive && !padRecordingActive;
   if (firstRecordingActive) {
     const elapsed = Math.max(0, engine.context.currentTime - engine.firstRecordingStartTime);
     const rawBars = elapsed / tempo.getBarDuration();
     elements.recBarLabel.textContent = `REC BAR ${Math.floor(rawBars) + 1}`;
     elements.completedBarsLabel.textContent = `Completed Bars: ${Math.floor(rawBars)}`;
   }
+  if (padRecordingActive) {
+    const bar = padLooper.getCurrentBar();
+    elements.recBarLabel.textContent = `● PAD RECORDING — BAR ${bar} / ${padLooper.loopBars}`;
+    elements.completedBarsLabel.textContent = `Events: ${padLooper.getEventCount()}`;
+  }
 
-  if (engine.state === STATES.COUNT_IN) {
+  const countIn = currentMode === 'PAD' ? padLooper.state === PAD_STATES.COUNT_IN : engine.state === STATES.COUNT_IN;
+  if (countIn) {
     elements.countdownOverlay.hidden = false;
     elements.countdownOverlay.classList.remove('is-go');
     elements.countdownLabel.textContent = 'COUNT IN';
@@ -428,6 +532,19 @@ function renderDebug() {
     'Actual Recorded Buffer Length': formatSeconds(info.recordingEnd.actualRecordedBufferLength),
     'Final Trimmed Buffer Length': formatSeconds(info.recordingEnd.finalTrimmedBufferLength),
   });
+  const pad = padLooper?.getDebugInfo();
+  if (pad) {
+    fillDebugList(elements.padDebug, {
+      'Mode': pad.mode, 'State': pad.state, 'Loop Length Bars': pad.loopLengthBars,
+      'Loop Length Seconds': formatSeconds(pad.loopLengthSeconds), 'PAD Recording Start Time': formatSeconds(pad.recordingStartTime),
+      'PAD Recording End Time': formatSeconds(pad.recordingEndTime), 'Current Loop Index': pad.currentLoopIndex,
+      'Recorded Event Count': pad.recordedEventCount, 'Layer Count': pad.layerCount,
+      'Next Scheduled Event Time': formatSeconds(pad.nextScheduledEventTime), 'Scheduler Lookahead': `${pad.schedulerLookahead} ms`,
+      'Scheduler Ahead Time': formatSeconds(pad.schedulerAheadTime), 'PAD ENGINE': pad.state === PAD_STATES.PLAYING ? 'OK' : 'READY',
+      'MIC ENGINE': engine.layers.length ? 'TESTED' : 'NOT TESTED',
+    });
+    elements.padEvents.textContent = pad.events.length ? pad.events.map(event => `L${event.layerId}  ${event.soundId.toUpperCase().padEnd(12)} ${event.offset.toFixed(3)} sec`).join('\n') : 'NO EVENTS';
+  }
   fillDebugList(elements.deviceDebug, {
     'User Agent': navigator.userAgent,
     'Screen Size': `${screen.width} × ${screen.height}`,
@@ -494,13 +611,54 @@ function renderEndPlan(plan) {
 }
 
 function renderRecordingIndicator(state) {
-  const recording = [STATES.FIRST_RECORDING, STATES.FIRST_RECORDING_ENDING, STATES.OVERDUB_RECORDING, STATES.OVERDUB_ENDING].includes(state);
-  const pending = [STATES.COUNT_IN, STATES.OVERDUB_PENDING].includes(state);
+  const recording = currentMode === 'PAD'
+    ? [PAD_STATES.RECORDING, PAD_STATES.OVERDUB_RECORDING, PAD_STATES.OVERDUB_ENDING].includes(state)
+    : [STATES.FIRST_RECORDING, STATES.FIRST_RECORDING_ENDING, STATES.OVERDUB_RECORDING, STATES.OVERDUB_ENDING].includes(state);
+  const pending = currentMode === 'PAD'
+    ? [PAD_STATES.COUNT_IN, PAD_STATES.OVERDUB_ARMED].includes(state)
+    : [STATES.COUNT_IN, STATES.OVERDUB_PENDING].includes(state);
   elements.recordingIndicator.classList.toggle('is-recording', recording);
   elements.recordingIndicator.classList.toggle('is-pending', pending);
-  const label = recording ? 'RECORDING' : (pending ? 'ARMED' : (state === STATES.PLAYING ? 'PLAYING' : 'READY'));
+  const playing = state === STATES.PLAYING || state === PAD_STATES.PLAYING;
+  const label = recording ? (state === PAD_STATES.RECORDING ? 'PAD RECORDING' : 'OVERDUB RECORDING') : (pending ? 'OVERDUB ARMED' : (playing ? 'LOOP PLAYING' : 'READY'));
   elements.recordingIndicator.querySelector('span').textContent = label;
 }
+
+async function switchMode(mode) {
+  if (!padLooper || mode === currentMode) return;
+  const hasData = currentMode === 'PAD' ? padLooper.hasLoop() : engine.layers.length > 0;
+  if (hasData && !window.confirm('モードを切り替えると現在のループを消去します。続けますか？')) return;
+  if (currentMode === 'PAD') padLooper.clear(); else engine.clear();
+  if (mode === 'MIC') await engine.enableMicrophone();
+  currentMode = mode;
+  engine.tempo.stop({ log: false });
+  renderMode();
+  addLog(`${mode} LOOPER mode selected`);
+}
+
+function renderMode() {
+  document.body.dataset.mode = currentMode;
+  elements.micModeButton.setAttribute('aria-pressed', String(currentMode === 'MIC'));
+  elements.padModeButton.setAttribute('aria-pressed', String(currentMode === 'PAD'));
+  elements.exportButton.disabled = currentMode === 'PAD';
+  elements.padLoopBars.value = String(padLooper.loopBars);
+  renderState(currentMode === 'PAD' ? padLooper.state : engine.state);
+  renderLayers();
+}
+
+function triggerPad(soundId, button) {
+  if (currentMode !== 'PAD' || !padLooper) return;
+  padLooper.playPad(soundId);
+  button.classList.remove('is-hit');
+  requestAnimationFrame(() => button.classList.add('is-hit'));
+  window.setTimeout(() => button.classList.remove('is-hit'), 90);
+}
+
+document.addEventListener('keydown', (event) => {
+  if (currentMode !== 'PAD' || /INPUT|SELECT|TEXTAREA/.test(event.target.tagName)) return;
+  const button = elements.padButtons[Number(event.key) - 1];
+  if (button && !event.repeat) triggerPad(button.dataset.pad, button);
+});
 
 function addLog(message, date = new Date()) {
   const time = date.toLocaleTimeString('ja-JP', { hour12: false });
