@@ -1,79 +1,76 @@
-<!DOCTYPE html>
-<html lang="ja">
+<!doctype html>
+<html lang=ja>
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="format-detection" content="telephone=no">
-  <meta name="theme-color" content="#11131a">
-  <meta name="description" content="ブラウザですぐ使えるサウンドツール集">
+  <meta charset=utf-8>
+  <meta name=viewport content=width=device-width,initial-scale=1>
+  <meta name=apple-mobile-web-app-capable content=yes>
+  <meta name=apple-mobile-web-app-status-bar-style content=black-translucent>
+  <meta name=format-detection content=telephone=no>
+  <meta name=theme-color content=#0b0d12>
+  <meta name=description content=ブラウザですぐ使えるサウンドツール集>
   <title>Sound Tools</title>
-  <link rel="stylesheet" href="menu.css">
+  <link rel=stylesheet href=menu.css>
 </head>
 <body>
-  <main class="shell">
-    <header class="site-header">
-      <div>
-        <p class="eyebrow">Sound Tools Collection</p>
-        <h1>音を、もっと<br><span>手軽に。</span></h1>
-      </div>
-      <p class="lead">再生する、重ねる、組み立てる。<br>ブラウザだけですぐ使えるサウンドツール集です。</p>
-    </header>
-
-    <section class="menu" aria-label="サウンドツール一覧">
-      <a class="tool-card sampler" href="./001_sound-sampler/">
-        <div class="card-visual" aria-hidden="true">
-          <span></span><span></span><span></span><span></span><span></span><span></span><span></span>
-        </div>
-        <div class="card-body">
-          <div class="card-topline">
-            <span class="tool-number">001</span>
-            <span class="tool-meta">Sound Pad</span>
-          </div>
-          <h2>効果音サンプラー</h2>
-          <p>カラフルなパッドをタップして効果音をすばやく再生。端末内の音声追加や録音にも対応します。</p>
-          <span class="tool-link">ツールを開く <span aria-hidden="true">→</span></span>
-        </div>
+<main class=shell>
+  <header class=site-header>
+    <div class=brand-mark aria-hidden=true><span></span><span></span><span></span><span></span></div>
+    <div class=header-copy>
+      <p class=eyebrow>Sound Tools Collection</p>
+      <h1>音で、<span>あそぶ。</span></h1>
+      <p class=lead>ブラウザですぐ使えるサウンドツール。</p>
+    </div>
+    <div class=collection-count aria-label=3つのツールを収録><strong>03</strong><span>TOOLS</span></div>
+  </header>
+  <div class=section-heading>
+    <h2>PLAYGROUND</h2>
+    <p><span class=hold-icon aria-hidden=true></span> 長押しで詳細</p>
+  </div>
+  <section class=game-grid aria-label=サウンドツール一覧>
+    <article class=game-tile data-game=sampler>
+      <a class=game-link href=./001_sound-sampler/ aria-describedby=sampler-type>
+        <span class=game-image><img src=assets/icons/sound-sampler.webp alt=発光する16個のパッドを描いた効果音サンプラーのアイコン width=640 height=640><span class=game-number>001</span><span class=hold-progress aria-hidden=true></span></span>
+        <span class=game-copy><span class=game-type id=sampler-type>SOUND PAD</span><strong>効果音サンプラー</strong></span>
+        <span class=launch-arrow aria-hidden=true>↗</span>
       </a>
-
-      <a class="tool-card sequencer" href="./002_wav-sequencer/">
-        <div class="card-visual step-grid" aria-hidden="true">
-          <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
-          <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
-        </div>
-        <div class="card-body">
-          <div class="card-topline">
-            <span class="tool-number">002</span>
-            <span class="tool-meta">Step Sequencer</span>
-          </div>
-          <h2>WAVシーケンサー</h2>
-          <p>WAV音源を16ステップで組み合わせ、ジャンルや音色を切り替えながらビートを作れます。</p>
-          <span class="tool-link">ツールを開く <span aria-hidden="true">→</span></span>
-        </div>
+      <button class=detail-trigger type=button aria-label=効果音サンプラーの詳細を表示>i</button>
+    </article>
+    <article class=game-tile data-game=sequencer>
+      <a class=game-link href=./002_wav-sequencer/ aria-describedby=sequencer-type>
+        <span class=game-image><img src=assets/icons/wav-sequencer.webp alt=16ステップの音楽グリッドを描いたWAVシーケンサーのアイコン width=640 height=640><span class=game-number>002</span><span class=hold-progress aria-hidden=true></span></span>
+        <span class=game-copy><span class=game-type id=sequencer-type>STEP SEQUENCER</span><strong>WAVシーケンサー</strong></span>
+        <span class=launch-arrow aria-hidden=true>↗</span>
       </a>
-
-      <a class="tool-card looper" href="./003_loop-station/">
-        <div class="card-visual loop-rings" aria-hidden="true">
-          <span></span><span></span><span></span>
-          <i></i>
-        </div>
-        <div class="card-body">
-          <div class="card-topline">
-            <span class="tool-number">003</span>
-            <span class="tool-meta">Live Looper</span>
-          </div>
-          <h2>ループステーション</h2>
-          <p>声や楽器をその場で録音して即ループ。再生を止めずにオーバーダブを重ねられます。</p>
-          <span class="tool-link">ツールを開く <span aria-hidden="true">→</span></span>
-        </div>
+      <button class=detail-trigger type=button aria-label=WAVシーケンサーの詳細を表示>i</button>
+    </article>
+    <article class=game-tile data-game=looper>
+      <a class=game-link href=./003_loop-station/ aria-describedby=looper-type>
+        <span class=game-image><img src=assets/icons/loop-station.webp alt=3本の発光する音声リングを描いたループステーションのアイコン width=640 height=640><span class=game-number>003</span><span class=hold-progress aria-hidden=true></span></span>
+        <span class=game-copy><span class=game-type id=looper-type>LIVE LOOPER</span><strong>ループステーション</strong></span>
+        <span class=launch-arrow aria-hidden=true>↗</span>
       </a>
-    </section>
-
-    <footer class="site-footer">
-      <p><span class="status-dot" aria-hidden="true"></span> 3 tools available</p>
-      <p>Works in modern browsers</p>
-    </footer>
-  </main>
+      <button class=detail-trigger type=button aria-label=ループステーションの詳細を表示>i</button>
+    </article>
+  </section>
+  <footer class=site-footer>
+    <p><span class=status-dot aria-hidden=true></span> ALL SYSTEMS READY</p>
+    <p>NO INSTALLATION REQUIRED</p>
+  </footer>
+</main>
+<dialog class=detail-dialog id=detailDialog aria-labelledby=detailTitle>
+  <div class=dialog-visual>
+    <img id=detailImage src=" alt=" width=640 height=640>
+    <span id=detailNumber>001</span>
+    <button class=dialog-close id=dialogClose type=button aria-label=詳細を閉じる>×</button>
+  </div>
+  <div class=dialog-body>
+    <p class=dialog-type id=detailType></p>
+    <h2 id=detailTitle></h2>
+    <p class=dialog-description id=detailDescription></p>
+    <ul class=feature-list id=detailFeatures></ul>
+    <a class=dialog-launch id=detailLaunch href=#>ツールを開く <span aria-hidden=true>↗</span></a>
+  </div>
+</dialog>
+<script src=menu.js></script>
 </body>
 </html>
