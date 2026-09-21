@@ -270,5 +270,13 @@
     "category": "演出",
     "color": "#ef4444",
     "loop": false
+  },
+  {
+    "id": "default-136",
+    "file": "コナン_メインテーマ.wav",
+    "name": "コナン メインテーマ",
+    "category": "BGM",
+    "color": "#7c3aed",
+    "loop": false
   }
 ]
