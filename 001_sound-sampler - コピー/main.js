@@ -179,7 +179,7 @@ class SamplerApp {
     this.storage = new StorageManager(); this.audio = new AudioManager((id, active, count) => this.updatePadPlaybackState(id, active, count));
     this.recording = new RecordingManager((level) => { $("#recordMeter").style.width = `${Math.round(level * 100)}%`; });
     this.rhythm = new RhythmManager(this.audio, { onBeat: (beat) => this.showBeat(beat), onStep: (step) => this.showRhythmStep(step), onState: (playing) => this.showRhythmState(playing) });
-    this.sounds = []; this.defaults = new Map(); this.category = "すべて"; this.sortMode = "manual"; this.editing = false; this.pendingFiles = []; this.recordBlob = null; this.statusTimer = null; this.padDrag = null;
+    this.sounds = []; this.defaults = new Map(); this.category = "すべて"; this.editing = false; this.pendingFiles = []; this.recordBlob = null; this.statusTimer = null; this.padDrag = null;
     this.rhythmReady = false; this.tapTimes = [];
   }
   async init() {
@@ -195,7 +195,6 @@ class SamplerApp {
     $("#addButton").addEventListener("click", () => $("#fileInput").click());
     $("#fileInput").addEventListener("change", (e) => this.prepareFiles(e.target.files));
     $("#editButton").addEventListener("click", () => this.toggleEdit());
-    $("#sortOrder").addEventListener("change", (event) => { this.sortMode = event.target.value; this.storage.setSetting("padSortMode", this.sortMode); this.renderPads(); });
     $("#statusClose").addEventListener("click", () => this.hideStatus());
     $("#settingsDialog").addEventListener("close", () => { this.audio.stopPreview(); if ($("#settingsDialog").returnValue === "save") this.savePadSettings(); });
     $("#settingVolume").addEventListener("input", (e) => $("#settingVolumeValue").value = `${Math.round(e.target.value * 100)}%`);
@@ -251,8 +250,6 @@ class SamplerApp {
       try { await withTimeout(this.storage.open(), 8000, "保存データの読み込みがタイムアウトしました"); } catch (error) { console.warn("IndexedDB:", error); this.status("保存機能を利用できないため、一時利用モードで起動します", true, true); }
       const volume = await this.storage.getSetting("masterVolume", .8); $("#masterVolume").value = volume; $("#masterVolumeValue").value = `${Math.round(volume * 100)}%`;
       this.category = await this.storage.getSetting("lastCategory", "すべて");
-      const savedSortMode = await this.storage.getSetting("padSortMode", "manual"); this.sortMode = ["manual", "id", "name", "category"].includes(savedSortMode) ? savedSortMode : "manual";
-      $("#sortOrder").value = this.sortMode;
       this.audio.setMasterVolume(volume);
       const result = await this.loadSounds();
       this.updateLoadingProgress(result.loaded + result.failed, result.loaded + result.failed, "リズム機能を準備しています", "バックリズム音源を確認中…");
@@ -278,7 +275,8 @@ class SamplerApp {
     this.sounds = []; this.defaults.clear();
     let definitions = [];
     const manifests = [
-      { url: "assets/sounds/sounds.json", assetBase: "assets/sounds", label: "sounds.json", category: null, required: true }
+      { url: "assets/sounds/sounds.json", assetBase: "assets/sounds", label: "sounds.json", category: null, required: true },
+      { url: "assets/drums/drums.json", assetBase: "assets/drums", label: "drums.json", category: "ドラム", required: false }
     ];
     for (const manifest of manifests) {
       this.updateLoadingProgress(0, 0, "音源一覧を取得しています", manifest.label);
@@ -356,32 +354,22 @@ class SamplerApp {
   render() { this.renderCategories(); this.renderPads(); }
   categories() { return [...new Set(this.sounds.map((sound) => sound.category || "未分類"))].sort((a, b) => a.localeCompare(b, "ja")); }
   renderCategories() {
-    const fixedCategories = ["すべて", "お気に入り", "録音", "未分類"];
+    const fixedCategories = ["すべて", "お気に入り", "録音", "ドラム", "未分類"];
     const categories = [...fixedCategories, ...this.categories().filter((value) => !fixedCategories.includes(value))];
     if (!categories.includes(this.category)) this.category = "すべて";
     $("#categoryTabs").replaceChildren(...categories.map((category) => {
       const button = document.createElement("button"); button.type = "button"; button.className = `category-tab${category === this.category ? " active" : ""}`; button.textContent = category;
       button.addEventListener("click", () => { this.category = category; this.storage.setSetting("lastCategory", category); this.render(); }); return button;
     }));
-    const editableCategories = [...new Set(["録音", "未分類", ...this.categories()])];
+    const editableCategories = [...new Set(["録音", "ドラム", "未分類", ...this.categories()])];
     $("#categoryList").replaceChildren(...editableCategories.map((category) => Object.assign(document.createElement("option"), { value: category })));
   }
-  compareSoundIds(a, b) { return String(a.id).localeCompare(String(b.id), "ja", { numeric: true, sensitivity: "base" }); }
-  compareSoundNames(a, b) { return String(a.displayName || "").localeCompare(String(b.displayName || ""), "ja", { numeric: true, sensitivity: "base" }) || this.compareSoundIds(a, b); }
-  sortedForDisplay(sounds) {
-    if (this.sortMode === "manual") return sounds;
-    return [...sounds].sort((a, b) => {
-      if (this.sortMode === "name") return this.compareSoundNames(a, b);
-      if (this.sortMode === "category") return String(a.category || "未分類").localeCompare(String(b.category || "未分類"), "ja", { numeric: true, sensitivity: "base" }) || this.compareSoundNames(a, b);
-      return this.compareSoundIds(a, b);
-    });
-  }
-  visibleSounds() { const visible = this.sounds.filter((sound) => this.category === "すべて" || (this.category === "お気に入り" ? sound.favorite : (sound.category || "未分類") === this.category)); return this.sortedForDisplay(visible); }
+  visibleSounds() { return this.sounds.filter((sound) => this.category === "すべて" || (this.category === "お気に入り" ? sound.favorite : (sound.category || "未分類") === this.category)); }
   renderPads() {
     if (this.padDrag) { const drag = this.padDrag; this.padDrag = null; this.cleanupPadDrag(drag); }
     const visible = this.visibleSounds(); const fragment = document.createDocumentFragment();
+    $("#padGrid").classList.toggle("drum-layout", this.category === "ドラム");
     $("#padGrid").classList.toggle("editing", this.editing);
-    $("#editBanner").textContent = this.sortMode === "manual" ? "パッドをドラッグして並べ替えできます" : "お気に入りを変更できます。ドラッグ並べ替えは「手動順」で利用できます";
     visible.forEach((sound) => fragment.append(this.createPad(sound))); $("#padGrid").replaceChildren(fragment);
     $("#soundCount").textContent = `${visible.length} / ${this.sounds.length} sounds`; $("#emptyState").hidden = visible.length > 0;
   }
@@ -410,11 +398,8 @@ class SamplerApp {
     pad.append(main, playingIndicator);
     if (this.editing) {
       const favorite = document.createElement("button"); favorite.type = "button"; favorite.className = `favorite-button${sound.favorite ? " active" : ""}`; favorite.textContent = "★"; favorite.setAttribute("aria-label", `${sound.displayName}のお気に入りを切り替え`); favorite.addEventListener("click", (event) => { event.stopPropagation(); this.toggleFavorite(sound); });
-      pad.append(favorite);
-      if (this.sortMode === "manual") {
-        const dragHandle = document.createElement("button"); dragHandle.type = "button"; dragHandle.className = "pad-drag-handle"; dragHandle.textContent = "⠿"; dragHandle.title = "ドラッグして並べ替え"; dragHandle.setAttribute("aria-label", `${sound.displayName}をドラッグして並べ替え`);
-        this.bindPadDrag(dragHandle, sound, pad); pad.append(dragHandle);
-      }
+      const dragHandle = document.createElement("button"); dragHandle.type = "button"; dragHandle.className = "pad-drag-handle"; dragHandle.textContent = "⠿"; dragHandle.title = "ドラッグして並べ替え"; dragHandle.setAttribute("aria-label", `${sound.displayName}をドラッグして並べ替え`);
+      this.bindPadDrag(dragHandle, sound, pad); pad.append(favorite, dragHandle);
     }
     const stopButton = document.createElement("button"); stopButton.type = "button"; stopButton.className = "pad-stop-button"; stopButton.textContent = "■"; stopButton.setAttribute("aria-label", `${sound.displayName}だけを停止`); stopButton.addEventListener("click", (event) => { event.stopPropagation(); this.stopPadSound(sound, pad); }); pad.append(stopButton);
     this.bindPadGesture(main, sound, pad); pad.addEventListener("contextmenu", (event) => event.preventDefault()); return pad;
@@ -429,7 +414,7 @@ class SamplerApp {
   bindPadDrag(handle, sound, pad) {
     let suppressClick = false;
     handle.addEventListener("pointerdown", (event) => {
-      if (!this.editing || this.sortMode !== "manual" || this.padDrag || (event.pointerType === "mouse" && event.button !== 0)) return;
+      if (!this.editing || this.padDrag || (event.pointerType === "mouse" && event.button !== 0)) return;
       event.preventDefault(); event.stopPropagation();
       this.padDrag = { pointerId: event.pointerId, sound, pad, handle, startX: event.clientX, startY: event.clientY, lastX: event.clientX, lastY: event.clientY, active: false, placeholder: null, scrollFrame: 0, scrollSpeed: 0, originalOrder: this.visibleSounds().map((item) => item.id) };
       try { handle.setPointerCapture(event.pointerId); } catch (_) {}
@@ -517,7 +502,7 @@ class SamplerApp {
     this.sounds.forEach((sound, index) => sound.order = index); await this.savePadOrder();
   }
   async moveVisiblePad(id, direction) {
-    if (!this.editing || this.sortMode !== "manual" || this.padDrag) return; const ids = this.visibleSounds().map((sound) => sound.id), index = ids.indexOf(id), target = clamp(index + direction, 0, ids.length - 1); if (index < 0 || index === target) return;
+    if (!this.editing || this.padDrag) return; const ids = this.visibleSounds().map((sound) => sound.id), index = ids.indexOf(id), target = clamp(index + direction, 0, ids.length - 1); if (index < 0 || index === target) return;
     const [moved] = ids.splice(index, 1); ids.splice(target, 0, moved);
     try { await this.applyVisiblePadOrder(ids); this.renderPads(); this.status(this.storage.available ? "パッドの並び順を保存しました" : "パッドを並べ替えました（一時利用モードのため次回は復元されません）", !this.storage.available, !this.storage.available); } catch (error) { console.error(error); this.status("並び順を保存できませんでした", true, true); }
   }
@@ -594,7 +579,7 @@ class SamplerApp {
   }
   async resetPad(id) { const sound = this.find(id); if (!sound || !confirm("このパッドの設定を初期化しますか？")) return; this.audio.stopSound(id); if (sound.sourceType === "default") { const buffer = sound.audioBuffer, failed = sound.loadFailed, order = sound.order; Object.assign(sound, this.defaults.get(id), { audioBuffer: buffer, loadFailed: failed, order }); await this.storage.delete(STORES.overrides, id); } else { Object.assign(sound, { displayName: fileStem(sound.fileName), category: "未分類", color: DEFAULT_COLOR, favorite: false, loop: false, volume: 1, playbackRate: 1, trimStart: 0, trimEnd: null }); await this.persistSound(sound); } $("#settingsDialog").close(); this.render(); this.status("設定を初期化しました"); }
   async deletePad(id) { const sound = this.find(id); if (!sound || sound.sourceType === "default" || !confirm(`「${sound.displayName}」を削除しますか？`)) return; this.audio.stopSound(id); await this.storage.delete(STORES.sounds, sound.dbKey ?? sound.id); this.sounds = this.sounds.filter((item) => item.id !== id); this.sounds.forEach((item, order) => item.order = order); await this.savePadOrder(); $("#settingsDialog").close(); this.render(); this.status("音源を削除しました"); }
-  async movePad(id, direction) { this.sortMode = "manual"; $("#sortOrder").value = this.sortMode; await this.storage.setSetting("padSortMode", this.sortMode); this.sortSounds(); const index = this.sounds.findIndex((sound) => sound.id === id); if (index < 0) return; let target = direction === "first" ? 0 : direction === "last" ? this.sounds.length - 1 : clamp(index + (direction === "prev" ? -1 : 1), 0, this.sounds.length - 1); const [sound] = this.sounds.splice(index, 1); this.sounds.splice(target, 0, sound); this.sounds.forEach((item, order) => item.order = order); await this.savePadOrder(); this.render(); }
+  async movePad(id, direction) { this.sortSounds(); const index = this.sounds.findIndex((sound) => sound.id === id); if (index < 0) return; let target = direction === "first" ? 0 : direction === "last" ? this.sounds.length - 1 : clamp(index + (direction === "prev" ? -1 : 1), 0, this.sounds.length - 1); const [sound] = this.sounds.splice(index, 1); this.sounds.splice(target, 0, sound); this.sounds.forEach((item, order) => item.order = order); await this.savePadOrder(); this.render(); }
   prepareFiles(fileList) { this.pendingFiles = [...fileList]; if (!this.pendingFiles.length) return; const first = this.pendingFiles[0]; $("#addFileSummary").textContent = this.pendingFiles.length === 1 ? first.name : `${first.name} ほか${this.pendingFiles.length - 1}件`; $("#addName").value = this.pendingFiles.length === 1 ? fileStem(first.name) : ""; $("#addDialog").showModal(); $("#fileInput").value = ""; }
   async addPendingFiles() {
     if (!this.storage.available) return this.status("一時利用モードでは音源を保存できません", true, true);
@@ -690,7 +675,7 @@ class SamplerApp {
   async exportSettings() { const data = { version: 1, exportedAt: new Date().toISOString(), settings: await this.storage.getAll(STORES.settings) || [], overrides: await this.storage.getAll(STORES.overrides) || [], userSettings: this.sounds.filter((s) => s.sourceType !== "default").map((s) => this.serializable(s, false)) }; const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }); const link = Object.assign(document.createElement("a"), { href: URL.createObjectURL(blob), download: "sound-sampler-settings.json" }); link.click(); setTimeout(() => URL.revokeObjectURL(link.href), 1000); }
   async importSettings(file) { if (!file) return; try { const data = JSON.parse(await file.text()); if (!Array.isArray(data.settings) || !Array.isArray(data.overrides)) throw new Error("形式が不正です"); await Promise.all(data.settings.map((item) => this.storage.put(STORES.settings, item))); await Promise.all(data.overrides.map((item) => this.storage.put(STORES.overrides, item))); if (Array.isArray(data.userSettings)) { for (const imported of data.userSettings) { const sound = this.find(imported.id); if (sound && sound.sourceType !== "default") { Object.assign(sound, imported, { blob: sound.blob, audioBuffer: sound.audioBuffer }); await this.persistSound(sound); } } } this.status("設定をインポートしました。再読み込みすると反映されます"); } catch (error) { console.error(error); this.status("設定ファイルを読み込めませんでした", true, true); } }
   async deleteByType(type) { const label = type === "recorded" ? "録音音源" : "追加音源"; if (!confirm(`${label}をすべて削除しますか？`)) return; const targets = this.sounds.filter((s) => s.sourceType === type); await Promise.all(targets.map((s) => this.storage.delete(STORES.sounds, s.dbKey ?? s.id))); this.sounds = this.sounds.filter((s) => s.sourceType !== type); this.sounds.forEach((sound, order) => sound.order = order); await this.savePadOrder(); this.render(); this.status(`${label}を削除しました`); }
-  async resetAllSettings() { if (!confirm("すべてのパッド設定を初期化しますか？")) return; await Promise.all([this.storage.clear(STORES.overrides), this.storage.delete(STORES.settings, "padOrder"), this.storage.delete(STORES.settings, "padSortMode")]); this.sortMode = "manual"; $("#sortOrder").value = this.sortMode; let userOrder = this.defaults.size; for (const sound of this.sounds) { this.audio.stopSound(sound.id); if (sound.sourceType === "default") { const buffer = sound.audioBuffer, failed = sound.loadFailed; Object.assign(sound, this.defaults.get(sound.id), { audioBuffer: buffer, loadFailed: failed }); } else { Object.assign(sound, { displayName: fileStem(sound.fileName), category: "未分類", color: DEFAULT_COLOR, favorite: false, loop: false, volume: 1, playbackRate: 1, trimStart: 0, trimEnd: null, order: userOrder++ }); await this.persistSound(sound); } } this.sortSounds(); this.render(); this.status("パッド設定を初期化しました"); }
+  async resetAllSettings() { if (!confirm("すべてのパッド設定を初期化しますか？")) return; await Promise.all([this.storage.clear(STORES.overrides), this.storage.delete(STORES.settings, "padOrder")]); let userOrder = this.defaults.size; for (const sound of this.sounds) { this.audio.stopSound(sound.id); if (sound.sourceType === "default") { const buffer = sound.audioBuffer, failed = sound.loadFailed; Object.assign(sound, this.defaults.get(sound.id), { audioBuffer: buffer, loadFailed: failed }); } else { Object.assign(sound, { displayName: fileStem(sound.fileName), category: "未分類", color: DEFAULT_COLOR, favorite: false, loop: false, volume: 1, playbackRate: 1, trimStart: 0, trimEnd: null, order: userOrder++ }); await this.persistSound(sound); } } this.sortSounds(); this.render(); this.status("パッド設定を初期化しました"); }
   async resetAllData() { if (!confirm("追加・録音音源と設定をすべて削除しますか？この操作は元に戻せません。")) return; this.stopEverything(false); await Promise.all(Object.values(STORES).map((store) => this.storage.clear(store))); location.reload(); }
   hideStatus() { const element = $("#status"); element.classList.add("is-hidden"); element.setAttribute("aria-hidden", "true"); }
   status(message, error = false, persistent = false) { clearTimeout(this.statusTimer); $("#statusText").textContent = message; $("#status").classList.toggle("error", error); $("#status").classList.remove("is-hidden"); $("#status").setAttribute("aria-hidden", "false"); if (!persistent) this.statusTimer = setTimeout(() => this.hideStatus(), 4500); }
